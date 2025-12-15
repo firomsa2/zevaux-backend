@@ -1,4 +1,3 @@
-// utils/hmac.ts
 import { createHmac, timingSafeEqual } from "crypto";
 import { log } from "./logger.js";
 

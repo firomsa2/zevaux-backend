@@ -1733,6 +1733,10 @@ type OpenAIMessage = {
   error?: any;
 };
 
+// Add these variables at the top of handleMediaStream:
+let isResponding = false;
+let responseQueue = [];
+
 export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
   let openaiWs: WebSocket | null = null;
   let callSid = "";
@@ -1741,6 +1745,11 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
   let isSessionInitialized = false;
   let audioBuffer: string[] = [];
   let hasTriggeredFirstResponse = false;
+  let lastUserUtterance = "";
+
+  // Add this at the top of your setupOpenAIMessageHandling function
+  let responseCount = 0;
+  let lastResponseTime = 0;
 
   console.log("🎯 New WebSocket connection to /media-stream");
 
@@ -1748,6 +1757,44 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
     ip: req.ip,
     url: req.url,
   });
+
+  // Create a queued response function:
+  async function triggerResponse() {
+    if (!openaiWs || openaiWs.readyState !== WebSocket.OPEN) return;
+
+    if (isResponding) {
+      responseQueue.push(true);
+      return;
+    }
+
+    isResponding = true;
+    console.log(
+      `🚀 Triggering response, queue length: ${responseQueue.length}`
+    );
+
+    try {
+      openaiWs.send(
+        JSON.stringify({
+          type: "response.create",
+          response: {
+            modalities: ["text", "audio"],
+          },
+        })
+      );
+    } catch (error) {
+      console.error("Failed to trigger response:", error);
+      isResponding = false;
+    }
+
+    // Set a timeout to reset isResponding (adjust based on typical response time)
+    setTimeout(() => {
+      isResponding = false;
+      if (responseQueue.length > 0) {
+        responseQueue.shift();
+        triggerResponse();
+      }
+    }, 3000); // 3 seconds timeout
+  }
 
   // Handle messages from Twilio
   conn.on("message", async (raw) => {
@@ -1865,6 +1912,7 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
               },
             })
           );
+          // triggerResponse();
         }
       }
       // 4. Handle STOP event (call ended)
@@ -1920,8 +1968,8 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
             turn_detection: {
               type: "server_vad",
               threshold: 0.3,
-              prefix_padding_ms: 200,
-              silence_duration_ms: 200, // REDUCED for faster responses
+              prefix_padding_ms: 100,
+              silence_duration_ms: 300, // REDUCED for faster responses
             },
             input_audio_format: "g711_ulaw",
             output_audio_format: "g711_ulaw",
@@ -2007,6 +2055,7 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
                 }
               }, 100); // REDUCED from 1500ms to 300ms
             }
+            // triggerResponse();
           }
         }, 50); // Small delay to ensure handlers are registered
       });
@@ -2068,41 +2117,91 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
           log.info("🔄 OpenAI session updated");
         }
 
-        // 2. Handle audio output - MOST IMPORTANT
-        if (msg.type === "response.audio.delta" && msg.delta) {
-          // Send audio to Twilio IMMEDIATELY
-          try {
-            conn.send(
-              JSON.stringify({
-                event: "media",
-                streamSid: streamSid,
-                media: {
-                  payload: msg.delta,
-                  track: "inbound",
-                },
-              })
-            );
-          } catch (sendError: any) {
-            log.error("Failed to send audio to Twilio", sendError);
+        // Replace both handlers with this single handler:
+        if (
+          (msg.type === "response.audio.delta" ||
+            msg.type === "response.output_audio.delta") &&
+          msg.delta
+        ) {
+          console.log(
+            `🔊 Audio delta type: ${msg.type}, length: ${msg.delta.length}`
+          );
+
+          // Only send if we haven't sent this already
+          if (msg.type === "response.audio.delta") {
+            // response.audio.delta is the main one to use
+            try {
+              conn.send(
+                JSON.stringify({
+                  event: "media",
+                  streamSid: streamSid,
+                  media: {
+                    payload: msg.delta,
+                    track: "inbound",
+                  },
+                })
+              );
+            } catch (sendError: any) {
+              log.error("Failed to send audio to Twilio", sendError);
+            }
           }
+          // Ignore response.output_audio.delta if it's duplicate
         }
 
+        // 2. Handle audio output - MOST IMPORTANT
+        // if (msg.type === "response.audio.delta" && msg.delta) {
+        //   // Send audio to Twilio IMMEDIATELY
+        //   try {
+        //     conn.send(
+        //       JSON.stringify({
+        //         event: "media",
+        //         streamSid: streamSid,
+        //         media: {
+        //           payload: msg.delta,
+        //           track: "inbound",
+        //         },
+        //       })
+        //     );
+        //   } catch (sendError: any) {
+        //     log.error("Failed to send audio to Twilio", sendError);
+        //   }
+        // }
+
         // Also handle output_audio.delta format
-        if (msg.type === "response.output_audio.delta" && msg.delta) {
-          try {
-            conn.send(
-              JSON.stringify({
-                event: "media",
-                streamSid: streamSid,
-                media: {
-                  payload: msg.delta,
-                  track: "inbound",
-                },
-              })
-            );
-          } catch (sendError: any) {
-            log.error("Failed to send output_audio to Twilio", sendError);
-          }
+        // if (msg.type === "response.output_audio.delta" && msg.delta) {
+        //   try {
+        //     conn.send(
+        //       JSON.stringify({
+        //         event: "media",
+        //         streamSid: streamSid,
+        //         media: {
+        //           payload: msg.delta,
+        //           track: "inbound",
+        //         },
+        //       })
+        //     );
+        //   } catch (sendError: any) {
+        //     log.error("Failed to send output_audio to Twilio", sendError);
+        //   }
+        // }
+        // Then in your message handlers, add:
+        if (msg.type === "response.create" || msg.type === "response.created") {
+          console.log(
+            `🔄 [${Date.now()}] Response triggered #${++responseCount}`
+          );
+        }
+
+        if (
+          msg.type === "response.audio.delta" ||
+          msg.type === "response.output_audio.delta"
+        ) {
+          const now = Date.now();
+          console.log(
+            `🎵 [${now}] Audio delta received, last was ${
+              now - lastResponseTime
+            }ms ago`
+          );
+          lastResponseTime = now;
         }
 
         // 3. Handle text output
@@ -2225,6 +2324,7 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
               })
             );
           }, 300);
+          // triggerResponse();
         }
 
         // 5. Handle tool calls

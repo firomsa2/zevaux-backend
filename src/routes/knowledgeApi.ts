@@ -10,6 +10,7 @@ const openai = new OpenAI({
 });
 
 export default async function knowledgeRoutes(fastify: FastifyInstance) {
+  log.info("Registering knowledge API routes");
   // Get knowledge base stats
   fastify.get(
     "/api/business/:businessId/knowledge/stats",
@@ -18,6 +19,7 @@ export default async function knowledgeRoutes(fastify: FastifyInstance) {
 
       try {
         const stats = await VectorSearchService.getKnowledgeStats(businessId);
+        log.info("Knowledge stats retrieved", { businessId, stats });
         return reply.send({ success: true, data: stats });
       } catch (error: any) {
         log.error("Failed to get knowledge stats", error);
@@ -64,9 +66,11 @@ export default async function knowledgeRoutes(fastify: FastifyInstance) {
   // Test embedding generation
   fastify.post("/api/embeddings/test", async (request, reply) => {
     const { text } = request.body as { text: string };
+    log.info("Embedding test requested", { textLength: text.length });
 
     try {
       const embedding = await VectorSearchService.generateEmbedding(text);
+      log.info("Embedding generated", { embeddingLength: embedding.length });
 
       return reply.send({
         success: true,

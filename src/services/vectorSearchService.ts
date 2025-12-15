@@ -263,15 +263,20 @@ export class VectorSearchService {
     languages: string[];
     lastUpdated: string | null;
   }> {
+    log.info("Fetching knowledge stats", { businessId });
     const { data: chunks, error: chunksError } = await supabase
       .from("knowledge_base_chunks")
       .select("id, created_at")
       .eq("business_id", businessId);
 
+    log.info("Chunks fetched", { count: chunks?.length || 0 });
+
     const { data: documents, error: docsError } = await supabase
       .from("knowledge_base_documents")
       .select("id, language, updated_at")
       .eq("business_id", businessId);
+
+    log.info("Documents fetched", { count: documents?.length || 0 });
 
     if (chunksError || docsError) {
       log.error("Failed to get knowledge stats", { chunksError, docsError });

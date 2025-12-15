@@ -198,6 +198,7 @@
 import { supabase } from "../utils/supabase.js";
 import { log } from "../utils/logger.js";
 import OpenAI from "openai";
+import { VectorSearchService } from "../services/vectorSearchService.js";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -402,6 +403,10 @@ End calls politely with: "Thanks for calling ${businessName}, have a great day!"
     formattedContext: string;
     searchMethod: string;
   }> {
+    log.info("Starting RAG knowledge search", {
+      businessId: this.businessId,
+      query,
+    });
     try {
       let searchResults: Array<{
         content: string;
@@ -415,6 +420,10 @@ End calls politely with: "Thanks for calling ${businessName}, have a great day!"
         options.includeConversationContext &&
         this.conversationContext.length > 0
       ) {
+        log.info("Searching with conversation context", {
+          businessId: this.businessId,
+          contextLength: this.conversationContext.length,
+        });
         // Search with conversation context
         searchResults = await VectorSearchService.searchWithContext(
           this.businessId!,
@@ -424,6 +433,9 @@ End calls politely with: "Thanks for calling ${businessName}, have a great day!"
             topK: options.topK || 5,
           }
         );
+        log.info("Contextual search results", {
+          resultCount: searchResults.length,
+        });
       } else {
         // Search just the current query
         searchResults = await VectorSearchService.hybridSearch(
@@ -434,6 +446,9 @@ End calls politely with: "Thanks for calling ${businessName}, have a great day!"
             minSimilarity: options.minSimilarity,
           }
         );
+        log.info("Query-only search results", {
+          resultCount: searchResults.length,
+        });
       }
       // Filter out low similarity results
       const filteredResults = searchResults.filter(
@@ -471,8 +486,10 @@ End calls politely with: "Thanks for calling ${businessName}, have a great day!"
     }>
   ): string {
     if (!snippets.length) {
+      log.info("No knowledge snippets to format");
       return "No relevant business information found.";
     }
+    log.info("Formatting knowledge snippets", { snippetCount: snippets.length });
 
     const formattedSnippets = snippets.map((snippet, index) => {
       const confidence = Math.round(snippet.similarity * 100);
@@ -481,6 +498,7 @@ End calls politely with: "Thanks for calling ${businessName}, have a great day!"
         snippet.content
       }${source}`;
     });
+    log.info("Formatted knowledge snippets", { snippetCount: formattedSnippets.length });
 
     return `BUSINESS KNOWLEDGE BASE (Relevant Information):
 ${formattedSnippets.join("\n\n")}
@@ -501,7 +519,7 @@ IMPORTANT: Use this information to answer accurately. If the information above d
     const ragResult = await this.searchKnowledgeWithRAG(query, {
       includeConversationContext: true,
       topK: 3,
-      minSimilarity: 0.6, // Require at least 60% similarity
+      minSimilarity: 0.5, // Require at least 60% similarity
     });
 
     // Combine static and dynamic information
@@ -561,7 +579,16 @@ RULES:
   }
 
   async searchKnowledge(query: string, topK = 3): Promise<string[]> {
+    log.info("Searching knowledge base", {
+      businessId: this.businessId,
+      query,
+    });
     if (!this.businessId || !query?.trim()) return [];
+    log.info("Performing knowledge base search", {
+      businessId: this.businessId,
+      query,
+      topK,
+    });
 
     try {
       // First try exact matches
@@ -572,9 +599,18 @@ RULES:
         .textSearch("content", query.split(" ").join(" & "))
         .limit(topK);
 
+      log.info("Exact match search results", {
+        businessId: this.businessId,
+        query,
+        exactMatchCount: exactMatches?.length || 0,
+      });
       if (exactMatches && exactMatches.length > 0) {
         return exactMatches.map((c) => c.content);
       }
+      log.info("No exact matches found, trying partial matches", {
+        businessId: this.businessId,
+        query,
+      });
 
       // Fallback to partial matches
       const { data: partialMatches } = await supabase
@@ -583,6 +619,12 @@ RULES:
         .eq("business_id", this.businessId)
         .or(`content.ilike.%${query}%,content.ilike.%${query.split(" ")[0]}%`)
         .limit(topK);
+
+      log.info("Partial match search results", {
+        businessId: this.businessId,
+        query,
+        partialMatchCount: partialMatches?.length || 0,
+      });
 
       return partialMatches?.map((c) => c.content) || [];
     } catch (error) {
@@ -654,13 +696,6 @@ BUSINESS DETAILS:
 - Industry: ${industry}
 - Primary Language: ${defaultLanguage}
 - Tone: ${tone}
-- Always Talk in English
-
-CRITICAL RULES FOR APPOINTMENT BOOKING:
-1. **NEVER** say an appointment is booked unless you have ACTUALLY used the 'book_appointment' tool
-2. **ALWAYS** gather ALL required information BEFORE using any booking tool:
-3. **DO NOT** make up confirmation numbers or times - wait for the actual tool response
-4. **VERIFY** information with the caller before using any tool
 
 IMPORTANT REMINDERS:
 1. NEVER reveal you're an AI or mention OpenAI/ChatGPT.
@@ -668,34 +703,6 @@ IMPORTANT REMINDERS:
 3. Always confirm important details like appointments or contact information.
 4. Be patient and repeat information if needed.
 5. If the caller is upset, remain calm and offer to transfer to a human.
-
-CRITICAL: You MUST use tools for booking appointments. Follow these exact steps:
-
-1. When caller mentions booking: "I can book that for you. I need a few details first."
-2. Collect ALL required information:
-   - Name
-   - Phone number
-   - Service type
-   - Preferred date (YYYY-MM-DD)
-   - Preferred time (HH:MM 24-hour)
-
-3. After collecting ALL information, USE THE 'book_appointment' TOOL.
-   DO NOT say "booked" or "confirmed" before using the tool.
-   Wait for the tool response, then read it verbatim.
-
-EXAMPLE DIALOGUE:
-Caller: "I want a haircut tomorrow at 2pm"
-You: "I can help with that! First, what's your full name?"
-[collect name]
-You: "And your phone number for confirmation?"
-[collect phone]
-You: "Let me book that for you..."
-[USE 'book_appointment' TOOL WITH COLLECTED INFO]
-[READ TOOL RESPONSE]
-You: "The booking system confirms: [read tool response]"
-
-NEVER invent confirmations. ALWAYS wait for tool response.
-If tool fails, say: "I'm having system issues. Can I take your details and have someone call back?"
 
 For questions about:
 - Hours: Check the business hours information

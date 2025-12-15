@@ -1,48 +1,3 @@
-// import Fastify from "fastify";
-// import fastifyWs from "@fastify/websocket";
-// import fastifyFormbody from "@fastify/formbody";
-// import dotenv from "dotenv";
-// import incomingCallRoute from "./routes/incomingCall.js";
-// import { handleMediaStream } from "./ws/mediaStream.js";
-
-// dotenv.config();
-
-// const fastify = Fastify({
-//   logger: true,
-//   connectionTimeout: 60000,
-//   keepAliveTimeout: 60000,
-// });
-
-// // Register plugins
-// fastify.register(fastifyFormbody);
-// fastify.register(fastifyWs, {
-//   options: {
-//     maxPayload: 1048576, // 1MB
-//   },
-// });
-
-// // Register routes
-// fastify.register(async (fastify) => {
-//   // HTTP endpoint for incoming Twilio call
-//   await incomingCallRoute(fastify);
-
-//   // Route for base WebSocket
-//   fastify.get("/media-stream", { websocket: true }, (connection, req) => {
-//     console.log("🎯 WebSocket connection received at /media-stream");
-//     handleMediaStream(connection, req);
-//   });
-// });
-
-// const port = parseInt(process.env.PORT || "5050");
-// fastify.listen({ port, host: "0.0.0.0" }, (err, address) => {
-//   if (err) {
-//     console.error(err);
-//     process.exit(1);
-//   }
-//   console.log(`Voice server listening on ${address}`);
-// });
-
-// server.ts
 import Fastify from "fastify";
 import fastifyWs from "@fastify/websocket";
 import fastifyFormbody from "@fastify/formbody";
@@ -116,30 +71,22 @@ fastify.get("/health", async (request, reply) => {
 
 // Register routes
 fastify.register(async (fastify) => {
-  // Voice endpoints
-  //   fastify.post("/incoming-call", async (request, reply) => {
-  //     // Alias for backward compatibility
-  //     const incomingCallHandler = (await import("./routes/incomingCall.js"))
-  //       .default;
-  //     return incomingCallHandler(fastify, request, reply);
-  //   });
-  // Voice endpoints
   await incomingCallRoute(fastify);
 
+  fastify.register(knowledgeRoutes);
   // Messaging endpoints
   fastify.register(messagingRoutes);
+  
   // WebSocket endpoint for media streaming
   fastify.get("/media-stream", { websocket: true }, (connection, req) => {
     log.info("🎯 WebSocket connection received at /media-stream", {
       ip: req.ip,
       userAgent: req.headers["user-agent"],
     });
-
+    
     handleMediaStream(connection, req);
   });
 });
-
-fastify.register(knowledgeRoutes);
 
 // Error handling
 fastify.setErrorHandler((error, request, reply) => {

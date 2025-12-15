@@ -3,7 +3,7 @@ import { VectorSearchService } from "../services/vectorSearchService.js";
 import { supabase } from "../utils/supabase.js";
 
 async function testRAG() {
-  const businessId = "0c8fac1e-4d51-4220-8b2e-ee54971f48d3"; // Your test business
+  const businessId = "91cf1656-9075-4bd9-94d1-c17d386bc4ea"; // test business id
 
   console.log("Testing RAG integration...");
 
@@ -11,7 +11,7 @@ async function testRAG() {
   console.log("\n1. Testing embedding generation:");
   const embedding = await VectorSearchService.generateEmbedding(
     // "What are your opening hours?"
-    "Zevaux Phase 1 – Developer Guide"
+    "Full calendar integration"
   );
   console.log(`Embedding length: ${embedding.length}`);
   console.log(`First 3 values: ${embedding.slice(0, 3)}`);
@@ -20,7 +20,7 @@ async function testRAG() {
   console.log("\n2. Testing vector search:");
   const results = await VectorSearchService.vectorSearch(
     businessId,
-    "1. Objective",
+    "Realtime Monitoring",
     { topK: 3 }
   );
 
@@ -34,7 +34,7 @@ async function testRAG() {
   console.log("\n3. Testing hybrid search:");
   const hybridResults = await VectorSearchService.hybridSearch(
     businessId,
-    "2. Core Infrastructure",
+    "Zevaux Phase 1 – Developer Guide ",
     { vectorTopK: 3 }
   );
 
