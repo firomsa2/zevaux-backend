@@ -19,7 +19,7 @@ setInterval(() => {
   }
 
   if (cleaned > 0) {
-    log.info("Cleaned up old sessions", { count: cleaned });
+    // log.info("Cleaned up old sessions", { count: cleaned });
   }
 }, 5 * 60 * 1000); // Every 5 minutes
 
@@ -28,11 +28,11 @@ export const SessionManager = {
     sessions.set(id, session);
     sessionTimestamps.set(id, Date.now());
 
-    log.info("Session stored", {
-      callSid: id,
-      totalSessions: sessions.size,
-      businessId: session.businessId,
-    });
+    // log.info("Session stored", {
+    //   callSid: id,
+    //   totalSessions: sessions.size,
+    //   businessId: session.businessId,
+    // });
   },
 
   get(id: string): CallSession | undefined {
@@ -49,11 +49,11 @@ export const SessionManager = {
     sessionTimestamps.delete(id);
 
     if (session) {
-      log.info("Session removed", {
-        callSid: id,
-        totalSessions: sessions.size,
-        businessId: session.businessId,
-      });
+      // log.info("Session removed", {
+      //   callSid: id,
+      //   totalSessions: sessions.size,
+      //   businessId: session.businessId,
+      // });
     }
   },
 
@@ -102,6 +102,6 @@ export const SessionManager = {
     const count = sessions.size;
     sessions.clear();
     sessionTimestamps.clear();
-    log.info("All sessions cleared", { count });
+    // log.info("All sessions cleared", { count });
   },
 };

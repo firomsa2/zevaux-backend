@@ -38,20 +38,20 @@ export class VectorSearchService {
       const embedding = response.data[0].embedding;
 
       // Cache the result
-      this.embeddingCache.set(cacheKey, {
-        embedding,
-        timestamp: Date.now(),
-      });
+      // this.embeddingCache.set(cacheKey, {
+      //   embedding,
+      //   timestamp: Date.now(),
+      // });
 
       // Clean cache periodically (remove old entries)
       this.cleanCache();
 
       return embedding;
     } catch (error: any) {
-      log.error("Failed to generate embedding", {
-        error: error.message,
-        text: text.substring(0, 100),
-      });
+      // log.error("Failed to generate embedding", {
+      //   error: error.message,
+      //   text: text.substring(0, 100),
+      // });
       throw error;
     }
   }
@@ -92,13 +92,14 @@ export class VectorSearchService {
       );
 
       if (error) {
-        log.error("Vector search error", error);
+        // log.error("Vector search error", error);
         throw error;
       }
 
       // Filter by minimum similarity if specified
       const filteredResults = options.minSimilarity
-        ? results.filter((r: any) => r.similarity >= options.minSimilarity)
+        ? // ? results.filter((r: any) => r.similarity >= options.minSimilarity)
+          results
         : results;
 
       return filteredResults.map((r: any) => ({
@@ -108,11 +109,11 @@ export class VectorSearchService {
         source: r.metadata?.source || r.metadata?.file_name || "Unknown",
       }));
     } catch (error: any) {
-      log.error("Vector search failed", {
-        businessId,
-        query,
-        error: error.message,
-      });
+      // log.error("Vector search failed", {
+      //   businessId,
+      //   query,
+      //   error: error.message,
+      // });
 
       // Fallback to text search
       return await this.textSearch(businessId, query, options);
@@ -142,7 +143,7 @@ export class VectorSearchService {
       );
 
       if (error) {
-        log.error("Text search error", error);
+        // log.error("Text search error", error);
         return [];
       }
 
@@ -152,11 +153,11 @@ export class VectorSearchService {
         source: r.metadata?.file_name || r.metadata?.source || "Unknown",
       }));
     } catch (error: any) {
-      log.error("Text search failed", {
-        businessId,
-        query,
-        error: error.message,
-      });
+      // log.error("Text search failed", {
+      //   businessId,
+      //   query,
+      //   error: error.message,
+      // });
       return [];
     }
   }
@@ -263,23 +264,23 @@ export class VectorSearchService {
     languages: string[];
     lastUpdated: string | null;
   }> {
-    log.info("Fetching knowledge stats", { businessId });
+    // log.info("Fetching knowledge stats", { businessId });
     const { data: chunks, error: chunksError } = await supabase
       .from("knowledge_base_chunks")
       .select("id, created_at")
       .eq("business_id", businessId);
 
-    log.info("Chunks fetched", { count: chunks?.length || 0 });
+    // log.info("Chunks fetched", { count: chunks?.length || 0 });
 
     const { data: documents, error: docsError } = await supabase
       .from("knowledge_base_documents")
       .select("id, language, updated_at")
       .eq("business_id", businessId);
 
-    log.info("Documents fetched", { count: documents?.length || 0 });
+    // log.info("Documents fetched", { count: documents?.length || 0 });
 
     if (chunksError || docsError) {
-      log.error("Failed to get knowledge stats", { chunksError, docsError });
+      // log.error("Failed to get knowledge stats", { chunksError, docsError });
       return {
         totalChunks: 0,
         totalDocuments: 0,
@@ -294,7 +295,8 @@ export class VectorSearchService {
 
     const lastUpdated = documents?.length
       ? documents.reduce((latest, doc) => {
-          const docDate = new Date(doc.updated_at || doc.created_at).getTime();
+          // const docDate = new Date(doc.updated_at || doc.created_at).getTime();
+          const docDate = new Date(doc.updated_at || new Date()).getTime();
           const latestDate = new Date(latest || 0).getTime();
           return docDate > latestDate ? doc.updated_at : latest;
         }, null as string | null)

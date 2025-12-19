@@ -253,7 +253,7 @@ export class CallSession {
         .single();
 
       if (phoneError || !phoneEndpoint) {
-        log.error("Phone endpoint not found", { to: this.to, phoneError });
+        // log.error("Phone endpoint not found", { to: this.to, phoneError });
         throw new Error("Phone number not configured for any business");
       }
 
@@ -267,13 +267,13 @@ export class CallSession {
         .limit(1)
         .single();
 
-      log.info("Loaded business and config", { businessId: this.businessId });
+      // log.info("Loaded business and config", { businessId: this.businessId });
 
       if (businessError || !business) {
-        log.error("Business not found", {
-          businessId: this.businessId,
-          businessError,
-        });
+        // log.error("Business not found", {
+        //   businessId: this.businessId,
+        //   businessError,
+        // });
         throw new Error("Business configuration not found");
       }
 
@@ -287,7 +287,7 @@ export class CallSession {
         .limit(1)
         .maybeSingle();
 
-      log.info("Business config loaded", { businessId: this.businessId });
+      // log.info("Business config loaded", { businessId: this.businessId });
 
       this.businessConfig = config?.config || {};
 
@@ -299,16 +299,16 @@ export class CallSession {
         .limit(1)
         .maybeSingle();
 
-      log.info("Business prompt loaded", { businessId: this.businessId });
+      // log.info("Business prompt loaded", { businessId: this.businessId });
 
       this.businessPrompt = prompt?.system_prompt || this.buildFallbackPrompt();
 
-      log.info("Business loaded successfully", {
-        businessId: this.businessId,
-        businessName: this.business.name,
-        hasConfig: !!this.businessConfig,
-        hasPrompt: !!this.businessPrompt,
-      });
+      // log.info("Business loaded successfully", {
+      //   businessId: this.businessId,
+      //   businessName: this.business.name,
+      //   hasConfig: !!this.businessConfig,
+      //   hasPrompt: !!this.businessPrompt,
+      // });
 
       return true;
     } catch (error: any) {
@@ -358,7 +358,7 @@ End calls politely with: "Thanks for calling ${businessName}, have a great day!"
         .single();
 
       if (error) {
-        log.error("createCallRow error", error);
+        // log.error("createCallRow error", error);
         throw error;
       }
 
@@ -379,7 +379,7 @@ End calls politely with: "Thanks for calling ${businessName}, have a great day!"
         },
       });
 
-      log.info("Call row created", { callId: this.callId });
+      // log.info("Call row created", { callId: this.callId });
       return this.callId;
     } catch (error: any) {
       log.error("Failed to create call row", error);
@@ -403,10 +403,10 @@ End calls politely with: "Thanks for calling ${businessName}, have a great day!"
     formattedContext: string;
     searchMethod: string;
   }> {
-    log.info("Starting RAG knowledge search", {
-      businessId: this.businessId,
-      query,
-    });
+    // log.info("Starting RAG knowledge search", {
+    //   businessId: this.businessId,
+    //   query,
+    // });
     try {
       let searchResults: Array<{
         content: string;
@@ -420,10 +420,10 @@ End calls politely with: "Thanks for calling ${businessName}, have a great day!"
         options.includeConversationContext &&
         this.conversationContext.length > 0
       ) {
-        log.info("Searching with conversation context", {
-          businessId: this.businessId,
-          contextLength: this.conversationContext.length,
-        });
+        // log.info("Searching with conversation context", {
+        //   businessId: this.businessId,
+        //   contextLength: this.conversationContext.length,
+        // });
         // Search with conversation context
         searchResults = await VectorSearchService.searchWithContext(
           this.businessId!,
@@ -433,9 +433,9 @@ End calls politely with: "Thanks for calling ${businessName}, have a great day!"
             topK: options.topK || 5,
           }
         );
-        log.info("Contextual search results", {
-          resultCount: searchResults.length,
-        });
+        // log.info("Contextual search results", {
+        //   resultCount: searchResults.length,
+        // });
       } else {
         // Search just the current query
         searchResults = await VectorSearchService.hybridSearch(
@@ -446,9 +446,9 @@ End calls politely with: "Thanks for calling ${businessName}, have a great day!"
             minSimilarity: options.minSimilarity,
           }
         );
-        log.info("Query-only search results", {
-          resultCount: searchResults.length,
-        });
+        // log.info("Query-only search results", {
+        //   resultCount: searchResults.length,
+        // });
       }
       // Filter out low similarity results
       const filteredResults = searchResults.filter(
@@ -464,11 +464,11 @@ End calls politely with: "Thanks for calling ${businessName}, have a great day!"
         searchMethod: searchResults[0]?.searchType || "hybrid",
       };
     } catch (error: any) {
-      log.error("RAG search failed", {
-        businessId: this.businessId,
-        query,
-        error: error.message,
-      });
+      // log.error("RAG search failed", {
+      //   businessId: this.businessId,
+      //   query,
+      //   error: error.message,
+      // });
 
       return {
         snippets: [],
@@ -489,7 +489,9 @@ End calls politely with: "Thanks for calling ${businessName}, have a great day!"
       log.info("No knowledge snippets to format");
       return "No relevant business information found.";
     }
-    log.info("Formatting knowledge snippets", { snippetCount: snippets.length });
+    // log.info("Formatting knowledge snippets", {
+    //   snippetCount: snippets.length,
+    // });
 
     const formattedSnippets = snippets.map((snippet, index) => {
       const confidence = Math.round(snippet.similarity * 100);
@@ -498,7 +500,9 @@ End calls politely with: "Thanks for calling ${businessName}, have a great day!"
         snippet.content
       }${source}`;
     });
-    log.info("Formatted knowledge snippets", { snippetCount: formattedSnippets.length });
+    // log.info("Formatted knowledge snippets", {
+    //   snippetCount: formattedSnippets.length,
+    // });
 
     return `BUSINESS KNOWLEDGE BASE (Relevant Information):
 ${formattedSnippets.join("\n\n")}
@@ -579,16 +583,16 @@ RULES:
   }
 
   async searchKnowledge(query: string, topK = 3): Promise<string[]> {
-    log.info("Searching knowledge base", {
-      businessId: this.businessId,
-      query,
-    });
+    // log.info("Searching knowledge base", {
+    //   businessId: this.businessId,
+    //   query,
+    // });
     if (!this.businessId || !query?.trim()) return [];
-    log.info("Performing knowledge base search", {
-      businessId: this.businessId,
-      query,
-      topK,
-    });
+    // log.info("Performing knowledge base search", {
+    //   businessId: this.businessId,
+    //   query,
+    //   topK,
+    // });
 
     try {
       // First try exact matches
@@ -599,18 +603,18 @@ RULES:
         .textSearch("content", query.split(" ").join(" & "))
         .limit(topK);
 
-      log.info("Exact match search results", {
-        businessId: this.businessId,
-        query,
-        exactMatchCount: exactMatches?.length || 0,
-      });
+      // log.info("Exact match search results", {
+      //   businessId: this.businessId,
+      //   query,
+      //   exactMatchCount: exactMatches?.length || 0,
+      // });
       if (exactMatches && exactMatches.length > 0) {
         return exactMatches.map((c) => c.content);
       }
-      log.info("No exact matches found, trying partial matches", {
-        businessId: this.businessId,
-        query,
-      });
+      // log.info("No exact matches found, trying partial matches", {
+      //   businessId: this.businessId,
+      //   query,
+      // });
 
       // Fallback to partial matches
       const { data: partialMatches } = await supabase
@@ -620,15 +624,15 @@ RULES:
         .or(`content.ilike.%${query}%,content.ilike.%${query.split(" ")[0]}%`)
         .limit(topK);
 
-      log.info("Partial match search results", {
-        businessId: this.businessId,
-        query,
-        partialMatchCount: partialMatches?.length || 0,
-      });
+      // log.info("Partial match search results", {
+      //   businessId: this.businessId,
+      //   query,
+      //   partialMatchCount: partialMatches?.length || 0,
+      // });
 
       return partialMatches?.map((c) => c.content) || [];
     } catch (error) {
-      log.error("Knowledge base search error", error);
+      // log.error("Knowledge base search error", error);
       return [];
     }
   }
@@ -763,7 +767,7 @@ For questions about:
 
       return completion.choices[0]?.message?.content || "Call completed.";
     } catch (error) {
-      log.error("Failed to generate AI summary", error);
+      // log.error("Failed to generate AI summary", error);
       return this.generateSimpleSummary();
     }
   }
@@ -856,7 +860,7 @@ For questions about:
         });
 
       if (transcriptError) {
-        log.error("persistTranscript error", transcriptError);
+        // log.error("persistTranscript error", transcriptError);
       }
 
       // Update call_log with outcome
@@ -891,11 +895,11 @@ For questions about:
         })
         .eq("id", this.callId);
 
-      log.info("Transcript and summary persisted", {
-        callId: this.callId,
-        outcome,
-        summaryLength: summary.length,
-      });
+      // log.info("Transcript and summary persisted", {
+      //   callId: this.callId,
+      //   outcome,
+      //   summaryLength: summary.length,
+      // });
     } catch (error: any) {
       log.error("Failed to persist transcript and summary", error);
     }
@@ -912,7 +916,7 @@ For questions about:
         })
         .eq("id", this.callId);
 
-      log.info("Call finalized", { callId: this.callId });
+      // log.info("Call finalized", { callId: this.callId });
     } catch (error: any) {
       log.error("finalizeCall error", error);
     }
@@ -930,7 +934,7 @@ For questions about:
         })
         .eq("twilio_sid", this.callSid);
 
-      log.error("Call marked as failed", { callSid: this.callSid, reason });
+      // log.error("Call marked as failed", { callSid: this.callSid, reason });
     } catch (error: any) {
       log.error("Failed to mark call as failed", error);
     }

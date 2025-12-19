@@ -1735,7 +1735,7 @@ type OpenAIMessage = {
 
 // Add these variables at the top of handleMediaStream:
 let isResponding = false;
-let responseQueue = [];
+let responseQueue: boolean[] = [];
 
 export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
   let openaiWs: WebSocket | null = null;
@@ -1753,10 +1753,10 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
 
   console.log("🎯 New WebSocket connection to /media-stream");
 
-  log.info("New WebSocket connection to /media-stream", {
-    ip: req.ip,
-    url: req.url,
-  });
+  // log.info("New WebSocket connection to /media-stream", {
+  //   ip: req.ip,
+  //   url: req.url,
+  // });
 
   // Create a queued response function:
   async function triggerResponse() {
@@ -1840,7 +1840,7 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
         // Get session
         session = SessionManager.get(paramCallSid);
         if (!session) {
-          log.warn("Session not found for callSid", paramCallSid);
+          // log.warn("Session not found for callSid", paramCallSid);
           conn.send(
             JSON.stringify({ event: "error", message: "session_missing" })
           );
@@ -1927,9 +1927,9 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
         conn.close();
       }
     } catch (e: any) {
-      log.error("Error handling Twilio message", {
-        error: e.message,
-      });
+      // log.error("Error handling Twilio message", {
+      //   error: e.message,
+      // });
     }
   });
 
@@ -1948,7 +1948,7 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
       }
 
       openaiWs.on("open", async () => {
-        log.info("✅ OpenAI WebSocket connection established", { callSid });
+        // log.info("✅ OpenAI WebSocket connection established", { callSid });
 
         // Get system prompt QUICKLY
         const systemPrompt = session.buildEnhancedSystemPrompt
@@ -2022,9 +2022,9 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
 
             // Process buffered audio immediately
             if (audioBuffer.length > 0) {
-              log.info("🔄 Processing buffered audio", {
-                count: audioBuffer.length,
-              });
+              // log.info("🔄 Processing buffered audio", {
+              //   count: audioBuffer.length,
+              // });
               for (const chunk of audioBuffer) {
                 if (openaiWs?.readyState === WebSocket.OPEN) {
                   openaiWs.send(
@@ -2061,14 +2061,14 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
       });
 
       openaiWs.on("error", (error) => {
-        log.error("❌ OpenAI WebSocket error", {
-          error: error.message,
-          callSid,
-        });
+        // log.error("❌ OpenAI WebSocket error", {
+        //   error: error.message,
+        //   callSid,
+        // });
       });
 
       openaiWs.on("close", (code, reason) => {
-        log.info("🔒 OpenAI WebSocket closed", { callSid });
+        // log.info("🔒 OpenAI WebSocket closed", { callSid });
 
         // Clean up active connections
         if (callSid && activeConnections.has(callSid)) {
@@ -2076,10 +2076,10 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
         }
       });
     } catch (error: any) {
-      log.error("Failed to initialize OpenAI connection", {
-        error: error.message,
-        callSid,
-      });
+      // log.error("Failed to initialize OpenAI connection", {
+      //   error: error.message,
+      //   callSid,
+      // });
     }
   }
 
@@ -2108,7 +2108,7 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
         ];
 
         if (importantTypes.includes(msg.type)) {
-          log.debug("📨 OpenAI message", { type: msg.type });
+          // log.debug("📨 OpenAI message", { type: msg.type });
         }
 
         // 1. Handle session updates
@@ -2267,7 +2267,7 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
           lastUserUtterance = userText;
           session.pushTranscriptSegment(userText, "user");
 
-          log.info("👤 User transcription", { text: userText });
+          // log.info("👤 User transcription", { text: userText });
 
           // Perform RAG search with conversation context
           const ragResult = await session.searchKnowledgeWithRAG(userText, {
@@ -2299,18 +2299,18 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
 
             openaiWs?.send(JSON.stringify(contextMessage));
 
-            log.info("Added RAG context to conversation", {
-              snippetCount: ragResult.snippets.length,
-              topSimilarity: ragResult.snippets[0].similarity,
-              searchMethod: ragResult.searchMethod,
-              businessId: session.businessId,
-            });
+            // log.info("Added RAG context to conversation", {
+            //   snippetCount: ragResult.snippets.length,
+            //   topSimilarity: ragResult.snippets[0].similarity,
+            //   searchMethod: ragResult.searchMethod,
+            //   businessId: session.businessId,
+            // });
           } else {
-            log.info("No relevant knowledge found for query", {
-              query: userText,
-              bestSimilarity: ragResult.snippets[0]?.similarity || 0,
-              businessId: session.businessId,
-            });
+            // log.info("No relevant knowledge found for query", {
+            //   query: userText,
+            //   bestSimilarity: ragResult.snippets[0]?.similarity || 0,
+            //   businessId: session.businessId,
+            // });
           }
 
           // Trigger AI response after a short delay to process context
@@ -2357,16 +2357,16 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
       const toolName = tool.name;
       const args = tool.arguments ? JSON.parse(tool.arguments) : {};
 
-      log.info("🔧 Tool call:", { toolName });
+      // log.info("🔧 Tool call:", { toolName });
 
       // Forward to n8n webhook
       const result = await forwardToN8n(toolName, args, session);
 
       // ADD ROBUST LOGGING HERE
-      log.info("Result from n8n webhook:", {
-        toolName,
-        result,
-      });
+      // log.info("Result from n8n webhook:", {
+      //   toolName,
+      //   result,
+      // });
 
       // Send result back to OpenAI
       const functionOutput = {
@@ -2400,7 +2400,7 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
 
   // Handle WebSocket close
   conn.on("close", async (code, reason) => {
-    log.info("🔚 Twilio WebSocket closed", { callSid });
+    // log.info("🔚 Twilio WebSocket closed", { callSid });
 
     try {
       // Clean up
@@ -2430,13 +2430,13 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
 
   // Handle WebSocket errors
   conn.on("error", (error) => {
-    log.error("❌ Twilio WebSocket error", { error: error.message });
+    // log.error("❌ Twilio WebSocket error", { error: error.message });
   });
 }
 
 async function forwardToN8n(toolName: string, args: any, session: any) {
   // Determine which webhook to use based on tool type
-  let webhookUrl = env.N8N_TOOL_WEBHOOK; // Default for general tools
+  let webhookUrl: string | undefined = env.N8N_TOOL_WEBHOOK; // Default for general tools
 
   // Route calendar-related tools to the calendar webhook
   const calendarTools = [
@@ -2448,7 +2448,7 @@ async function forwardToN8n(toolName: string, args: any, session: any) {
 
   if (calendarTools.includes(toolName)) {
     webhookUrl = env.N8N_CALENDAR_WEBHOOK;
-    log.info("📅 Routing to calendar webhook", { toolName, webhookUrl });
+    // log.info("📅 Routing to calendar webhook", { toolName, webhookUrl });
   }
 
   if (!webhookUrl) {
@@ -2472,7 +2472,7 @@ async function forwardToN8n(toolName: string, args: any, session: any) {
   };
 
   try {
-    log.info("📤 Forwarding tool call to n8n", { toolName, webhookUrl });
+    // log.info("📤 Forwarding tool call to n8n", { toolName, webhookUrl });
 
     const response = await fetch(webhookUrl, {
       method: "POST",
@@ -2488,18 +2488,18 @@ async function forwardToN8n(toolName: string, args: any, session: any) {
     }
 
     const result = await response.json();
-    log.info("✅ Received response from n8n", {
-      toolName,
-      success: result.success,
-    });
+    // log.info("✅ Received response from n8n", {
+    //   toolName,
+    //   success: result.success,
+    // });
 
     return result;
   } catch (error: any) {
-    log.error("Failed to forward to n8n", {
-      error: error.message,
-      toolName,
-      webhookUrl,
-    });
+    // log.error("Failed to forward to n8n", {
+    //   error: error.message,
+    //   toolName,
+    //   webhookUrl,
+    // });
 
     // Return a fallback response that the AI can use
     return {

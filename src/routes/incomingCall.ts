@@ -14,10 +14,10 @@ const twilioClient = twilio(
 export default async function incomingCallRoute(fastify: FastifyInstance) {
   fastify.post("/incoming-call", async (request, reply) => {
     try {
-      log.info("Incoming call request received", {
-        headers: request.headers,
-        body: request.body,
-      });
+      // log.info("Incoming call request received", {
+      //   headers: request.headers,
+      //   body: request.body,
+      // });
       console.log("Incoming call request received", {
         headers: request.headers,
         body: request.body,
@@ -44,12 +44,12 @@ export default async function incomingCallRoute(fastify: FastifyInstance) {
       const callSid = params.CallSid || params.callSid || `cs_${Date.now()}`;
       const direction = params.Direction || "inbound";
 
-      log.info("Processing incoming call", {
-        callSid,
-        from: from.replace(/\d(?=\d{4})/g, "*"), // Mask phone number in logs
-        to: to.replace(/\d(?=\d{4})/g, "*"),
-        direction,
-      });
+      // log.info("Processing incoming call", {
+      //   callSid,
+      //   from: from.replace(/\d(?=\d{4})/g, "*"), // Mask phone number in logs
+      //   to: to.replace(/\d(?=\d{4})/g, "*"),
+      //   direction,
+      // });
 
       // Create and initialize session
       const session = new CallSession({ callSid, from, to, direction });
@@ -58,11 +58,11 @@ export default async function incomingCallRoute(fastify: FastifyInstance) {
         await session.loadBusinessAndConfig();
         await session.createCallRow(params);
       } catch (err: any) {
-        log.error("Failed to initialize call session", {
-          error: err.message,
-          callSid,
-          to,
-        });
+        // log.error("Failed to initialize call session", {
+        //   error: err.message,
+        //   callSid,
+        //   to,
+        // });
 
         // Return error TwiML
         const errorTwiML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -100,19 +100,19 @@ export default async function incomingCallRoute(fastify: FastifyInstance) {
       // Generate TwiML response
       const twiml = generateTwiML(wsUrl, callSid, token, from, to, session);
 
-      log.info("Returning TwiML response", {
-        wsUrl,
-        callSid,
-        businessId: session.businessId,
-        businessName: session.business?.name,
-      });
+      // log.info("Returning TwiML response", {
+      //   wsUrl,
+      //   callSid,
+      //   businessId: session.businessId,
+      //   businessName: session.business?.name,
+      // });
 
       return reply.type("text/xml").send(twiml);
     } catch (error: any) {
-      log.error("Unexpected error in incoming call route", {
-        error: error.message,
-        stack: error.stack,
-      });
+      // log.error("Unexpected error in incoming call route", {
+      //   error: error.message,
+      //   stack: error.stack,
+      // });
 
       // Fallback TwiML
       const fallbackTwiML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -137,11 +137,11 @@ export default async function incomingCallRoute(fastify: FastifyInstance) {
   fastify.post("/voicemail", async (request, reply) => {
     const params = request.body as Record<string, any>;
 
-    log.info("Voicemail received", {
-      callSid: params.CallSid,
-      recordingUrl: params.RecordingUrl,
-      duration: params.RecordingDuration,
-    });
+    // log.info("Voicemail received", {
+    //   callSid: params.CallSid,
+    //   recordingUrl: params.RecordingUrl,
+    //   duration: params.RecordingDuration,
+    // });
 
     // TODO: Process voicemail - save to storage, notify business, etc.
 
@@ -179,7 +179,7 @@ async function validateTwilioSignature(request: any): Promise<boolean> {
       params
     );
   } catch (error) {
-    log.error("Twilio signature validation error", error);
+    // log.error("Twilio signature validation error", error);
     return false;
   }
 }
@@ -197,11 +197,11 @@ function generateTwiML(
     businessId: session.businessId,
     businessName: session.business?.name,
   });
-  log.info("Generating TwiML for call", {
-    callSid,
-    businessId: session.businessId,
-    businessName: session.business?.name,
-  });
+  // log.info("Generating TwiML for call", {
+  //   callSid,
+  //   businessId: session.businessId,
+  //   businessName: session.business?.name,
+  // });
   // Check if we should play a greeting first
   const greeting =
     session.businessConfig?.introScript ||
@@ -210,17 +210,17 @@ function generateTwiML(
     }. Connecting you now.`;
 
   console.log("Using greeting", { greeting });
-  log.info("Using greeting", { greeting });
+  // log.info("Using greeting", { greeting });
   // Get voice profile
   const voiceProfile = session.businessConfig?.voiceProfile || {
     voice: "alice",
     language: "en-US",
   };
   console.log("Using voice profile", voiceProfile);
-  log.info("Using voice profile", { voiceProfile });
+  // log.info("Using voice profile", { voiceProfile });
 
   console.log("Generated TwiML", { wsUrl, callSid, from, to });
-  log.info("Generated TwiML", { wsUrl, callSid, from, to });
+  // log.info("Generated TwiML", { wsUrl, callSid, from, to });
 
   console.log(
     "TwiML Response:",

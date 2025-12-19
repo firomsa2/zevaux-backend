@@ -6,7 +6,8 @@ dotenv.config();
 
 const envSchema = z.object({
   // Server
-  PORT: z.string().transform(Number).default("5050"),
+  PORT: z.string().transform(Number).default(5050),
+  // PORT: z.string().transform(Number).default("5050"),
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),
@@ -31,7 +32,8 @@ const envSchema = z.object({
     .string()
     .min(32)
     .default("change-me-to-a-secure-random-string"),
-  CALL_TOKEN_TTL: z.string().transform(Number).default("300"),
+  // CALL_TOKEN_TTL: z.string().transform(Number).default("300"),
+  CALL_TOKEN_TTL: z.string().transform(Number).default(300),
 
   // n8n Integration
   N8N_TOOL_WEBHOOK: z.string().url(),

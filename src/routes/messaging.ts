@@ -16,7 +16,7 @@ export default async function messagingRoutes(fastify: FastifyInstance) {
     const to = params.To || params.to;
     const body = params.Body || params.body || "";
 
-    log.info("Incoming SMS", { from, to, body });
+    // log.info("Incoming SMS", { from, to, body });
 
     try {
       // Find business by phone number
@@ -78,8 +78,8 @@ export default async function messagingRoutes(fastify: FastifyInstance) {
 
       return reply.send({ success: true, response: responseText });
     } catch (error) {
-      log.error("Error processing SMS", error);
-      return reply.status(500).send({ error: "Failed to process message" });
+      // log.error("Error processing SMS", error);
+      // return reply.status(500).send({ error: "Failed to process message" });
     }
   });
 }

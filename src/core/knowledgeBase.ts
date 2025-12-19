@@ -17,13 +17,13 @@ export async function searchKnowledgeBase(
       .limit(topK);
 
     if (error) {
-      log.error("Knowledge base search error", error);
+      // log.error("Knowledge base search error", error);
       return [];
     }
 
-    return chunks?.map(c => c.content) || [];
+    return chunks?.map((c) => c.content) || [];
   } catch (error) {
-    log.error("Error searching knowledge base", error);
+    // log.error("Error searching knowledge base", error);
     return [];
   }
 }

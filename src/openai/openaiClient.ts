@@ -8,7 +8,7 @@ export function createOpenAIRealtimeWS(): WebSocket {
   // const model = "gpt-realtime";
   const url = `wss://api.openai.com/v1/realtime?model=${model}`;
 
-  log.info("🔌 Connecting to OpenAI Realtime API", { model });
+  // log.info("🔌 Connecting to OpenAI Realtime API", { model });
 
   const ws = new WebSocket(url, {
     headers: {
@@ -36,14 +36,14 @@ export function createOpenAIRealtimeWS(): WebSocket {
 
   ws.on("error", (error) => {
     clearTimeout(connectionTimeout);
-    log.error("❌ OpenAI connection error", { error: error.message });
+    // log.error("❌ OpenAI connection error", { error: error.message });
   });
 
   ws.on("close", (code, reason) => {
-    log.info("🔒 OpenAI connection closed", {
-      code,
-      reason: reason.toString(),
-    });
+    // log.info("🔒 OpenAI connection closed", {
+    //   code,
+    //   reason: reason.toString(),
+    // });
   });
 
   return ws;

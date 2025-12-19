@@ -26,7 +26,7 @@ export function verifyCallToken(token: string): boolean {
     // Check if token is expired
     const now = Math.floor(Date.now() / 1000);
     if (now - timestamp > TOKEN_TTL) {
-      log.warn("Token expired", { callSid, timestamp, now });
+      // log.warn("Token expired", { callSid, timestamp, now });
       return false;
     }
 
@@ -47,12 +47,12 @@ export function verifyCallToken(token: string): boolean {
     const isValid = timingSafeEqual(signatureBuffer, expectedBuffer);
 
     if (!isValid) {
-      log.warn("Invalid token signature", { callSid });
+      // log.warn("Invalid token signature", { callSid });
     }
 
     return isValid;
   } catch (error) {
-    log.error("Error verifying token", error);
+    // log.error("Error verifying token", error);
     return false;
   }
 }
@@ -74,7 +74,7 @@ export function verifyWebhookSignature(
       Buffer.from(expectedSignature, "hex")
     );
   } catch (error) {
-    log.error("Error verifying webhook signature", error);
+    // log.error("Error verifying webhook signature", error);
     return false;
   }
 }

@@ -76,32 +76,31 @@ fastify.register(async (fastify) => {
   fastify.register(knowledgeRoutes);
   // Messaging endpoints
   fastify.register(messagingRoutes);
-  
+
   // WebSocket endpoint for media streaming
   fastify.get("/media-stream", { websocket: true }, (connection, req) => {
-    log.info("🎯 WebSocket connection received at /media-stream", {
-      ip: req.ip,
-      userAgent: req.headers["user-agent"],
-    });
-    
+    // log.info("🎯 WebSocket connection received at /media-stream", {
+    //   ip: req.ip,
+    //   userAgent: req.headers["user-agent"],
+    // });
+
     handleMediaStream(connection, req);
   });
 });
 
 // Error handling
 fastify.setErrorHandler((error, request, reply) => {
-  log.error("Unhandled error", {
-    error: error.message,
-    stack: error.stack,
-    url: request.url,
-    method: request.method,
-    ip: request.ip,
-  });
+  // log.error("Unhandled error", {
+  //   error: error.message,
+  //   stack: error.stack,
+  //   url: request.url,
+  //   method: request.method,
+  //   ip: request.ip,
+  // });
 
   reply.status(500).send({
     error: "Internal server error",
-    message:
-      env.NODE_ENV === "production" ? "Something went wrong" : error.message,
+    message: env.NODE_ENV === "production" ? "Something went wrong" : "",
     requestId: request.id,
   });
 });
@@ -142,7 +141,7 @@ const start = async () => {
     );
     log.info(`📞 Incoming call endpoint: ${address}/api/voice/incoming-call`);
   } catch (err) {
-    log.error("Failed to start server", err);
+    log.error("Failed to start server");
     process.exit(1);
   }
 };
