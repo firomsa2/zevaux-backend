@@ -1744,21 +1744,6 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
   let lastUserUtterance = "";
   let hasReceivedAnyCallerAudio = false;
 
-  let responseInFlight = false;
-  let allowAssistantAudio = true;
-
-  function safeCreateResponse() {
-    if (!openaiWs) return;
-    if (responseInFlight) return;
-
-    responseInFlight = true;
-
-    safeSendToOpenAI({
-      type: "response.create",
-      response: { modalities: ["text", "audio"] },
-    });
-  }
-
   // Connection/turn state (per websocket)
   let hasReceivedStop = false;
   let isUserSpeaking = false;
@@ -1846,10 +1831,8 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
         type: "conversation.item.create",
         item: {
           type: "message",
-          // role: "system",
-          // content: ragResult.formattedContext,
-          role: "assistant",
-          content: `CONTEXT (do not repeat verbatim):\n${ragResult.formattedContext}`,
+          role: "system",
+          content: ragResult.formattedContext,
         },
       });
 
@@ -2117,13 +2100,12 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
           });
 
           setTimeout(() => {
-            // safeSendToOpenAI({
-            //   type: "response.create",
-            //   response: {
-            //     modalities: ["text", "audio"],
-            //   },
-            // });
-            safeCreateResponse();
+            safeSendToOpenAI({
+              type: "response.create",
+              response: {
+                modalities: ["text", "audio"],
+              },
+            });
           }, 50);
         }
       });
@@ -2196,57 +2178,39 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
         }
 
         // Replace both handlers with this single handler:
-        // if (
-        //   (msg.type === "response.audio.delta" ||
-        //     msg.type === "response.output_audio.delta") &&
-        //   msg.delta
-        // ) {
-        //   console.log(
-        //     `🔊 Audio delta type: ${msg.type}, length: ${msg.delta.length}`
-        //   );
-
-        //   // If caller is speaking, drop outbound audio (barge-in)
-        //   if (isUserSpeaking) {
-        //     return;
-        //   }
-
-        //   isAssistantSpeaking = true;
-
-        //   // Only send if we haven't sent this already
-        //   if (msg.type === "response.audio.delta") {
-        //     // response.audio.delta is the main one to use
-        //     try {
-        //       safeSendToTwilio({
-        //         event: "media",
-        //         streamSid: streamSid,
-        //         media: {
-        //           payload: msg.delta,
-        //           track: "outbound",
-        //         },
-        //       });
-        //     } catch (sendError: any) {
-        //       log.error("Failed to send audio to Twilio", sendError);
-        //     }
-        //   }
-        //   // Ignore response.output_audio.delta if it's duplicate
-        // }
         if (
           (msg.type === "response.audio.delta" ||
             msg.type === "response.output_audio.delta") &&
           msg.delta
         ) {
-          if (!allowAssistantAudio || isUserSpeaking) return;
+          console.log(
+            `🔊 Audio delta type: ${msg.type}, length: ${msg.delta.length}`
+          );
+
+          // If caller is speaking, drop outbound audio (barge-in)
+          if (isUserSpeaking) {
+            return;
+          }
 
           isAssistantSpeaking = true;
 
-          safeSendToTwilio({
-            event: "media",
-            streamSid,
-            media: {
-              payload: msg.delta,
-              track: "outbound",
-            },
-          });
+          // Only send if we haven't sent this already
+          if (msg.type === "response.audio.delta") {
+            // response.audio.delta is the main one to use
+            try {
+              safeSendToTwilio({
+                event: "media",
+                streamSid: streamSid,
+                media: {
+                  payload: msg.delta,
+                  track: "outbound",
+                },
+              });
+            } catch (sendError: any) {
+              log.error("Failed to send audio to Twilio", sendError);
+            }
+          }
+          // Ignore response.output_audio.delta if it's duplicate
         }
 
         // 2. Handle audio output - MOST IMPORTANT
@@ -2359,53 +2323,30 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
         //   }
         // }
         // 4. Handle user transcription - ENHANCED WITH RAG
-        // if (
-        //   msg.type ===
-        //     "conversation.item.input_audio_transcription.completed" &&
-        //   msg.transcript
-        // ) {
-        //   const userText = msg.transcript;
-        //   lastUserUtterance = userText;
-        //   session.pushTranscriptSegment(userText, "user");
-
-        //   // log.info("👤 User transcription", { text: userText });
-
-        //   // Debounce transcripts and respond using a short async path (keeps realtime loop snappy)
-        //   pendingTranscript = { eventId: msg.event_id, text: userText };
-        //   if (pendingTranscriptTimer) {
-        //     clearTimeout(pendingTranscriptTimer);
-        //   }
-        //   pendingTranscriptTimer = setTimeout(() => {
-        //     const t = pendingTranscript;
-        //     pendingTranscript = null;
-        //     pendingTranscriptTimer = null;
-        //     if (t) {
-        //       void enrichContextAndRespond(t.text);
-        //     }
-        //   }, 50);
-        // }
-
         if (
           msg.type ===
             "conversation.item.input_audio_transcription.completed" &&
           msg.transcript
         ) {
-          const userText = msg.transcript.trim();
-          if (!userText) return;
-
+          const userText = msg.transcript;
           lastUserUtterance = userText;
           session.pushTranscriptSegment(userText, "user");
 
-          if (pendingTranscriptTimer) clearTimeout(pendingTranscriptTimer);
+          // log.info("👤 User transcription", { text: userText });
 
-          pendingTranscriptTimer = setTimeout(async () => {
+          // Debounce transcripts and respond using a short async path (keeps realtime loop snappy)
+          pendingTranscript = { eventId: msg.event_id, text: userText };
+          if (pendingTranscriptTimer) {
+            clearTimeout(pendingTranscriptTimer);
+          }
+          pendingTranscriptTimer = setTimeout(() => {
+            const t = pendingTranscript;
+            pendingTranscript = null;
             pendingTranscriptTimer = null;
-
-            if (isUserSpeaking || responseInFlight) return;
-
-            await enrichContextAndRespond(userText);
-            safeCreateResponse();
-          }, 80);
+            if (t) {
+              void enrichContextAndRespond(t.text);
+            }
+          }, 50);
         }
 
         // 5. Handle tool calls
@@ -2414,14 +2355,9 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
         }
 
         // 6. Handle response completion
-        // if (msg.type === "response.done") {
-        //   log.info("✅ AI response completed");
-        //   isAssistantSpeaking = false;
-        // }
         if (msg.type === "response.done") {
+          log.info("✅ AI response completed");
           isAssistantSpeaking = false;
-          allowAssistantAudio = true;
-          responseInFlight = false;
         }
 
         // 7. Handle errors
@@ -2430,23 +2366,12 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
         }
 
         // 8. Handle speech detection (debug only)
-        // if (msg.type === "input_audio_buffer.speech_started") {
-        //   isUserSpeaking = true;
-        //   // If assistant is speaking, barge-in: stop playback immediately
-        //   if (isAssistantSpeaking) {
-        //     clearTwilioPlayback();
-        //     cancelAssistantResponse();
-        //     isAssistantSpeaking = false;
-        //   }
-        // }
         if (msg.type === "input_audio_buffer.speech_started") {
           isUserSpeaking = true;
-          allowAssistantAudio = false;
-
+          // If assistant is speaking, barge-in: stop playback immediately
           if (isAssistantSpeaking) {
             clearTwilioPlayback();
             cancelAssistantResponse();
-            responseInFlight = false;
             isAssistantSpeaking = false;
           }
         }
@@ -2454,7 +2379,7 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
         if (msg.type === "input_audio_buffer.speech_stopped") {
           isUserSpeaking = false;
           // Best-effort commit for manual turn control (safe even if ignored)
-          // safeSendToOpenAI({ type: "input_audio_buffer.commit" });
+          safeSendToOpenAI({ type: "input_audio_buffer.commit" });
         }
       } catch (error: any) {
         log.error("Error handling OpenAI message", error);
@@ -2462,82 +2387,53 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
     });
   }
 
-  // async function handleToolCall(tool: any) {
-  //   try {
-  //     const toolName = tool.name;
-  //     const args = tool.arguments ? JSON.parse(tool.arguments) : {};
-
-  //     // log.info("🔧 Tool call:", { toolName });
-
-  //     // Forward to n8n webhook
-  //     const result = await forwardToN8n(toolName, args, session);
-
-  //     // ADD ROBUST LOGGING HERE
-  //     // log.info("Result from n8n webhook:", {
-  //     //   toolName,
-  //     //   result,
-  //     // });
-
-  //     // Send result back to OpenAI
-  //     const functionOutput = {
-  //       type: "conversation.item.create",
-  //       item: {
-  //         type: "function_call_output",
-  //         role: "system",
-  //         output: JSON.stringify(result),
-  //       },
-  //     };
-
-  //     openaiWs?.send(JSON.stringify(functionOutput));
-
-  //     // Trigger next response immediately
-  //     setTimeout(() => {
-  //       if (openaiWs?.readyState === WebSocket.OPEN) {
-  //         openaiWs.send(
-  //           JSON.stringify({
-  //             type: "response.create",
-  //             response: {
-  //               modalities: ["text", "audio"],
-  //             },
-  //           })
-  //         );
-  //       }
-  //     }, 100); // Minimal delay
-  //   } catch (error: any) {
-  //     log.error("Error handling tool call", error);
-  //   }
-  // }
-
-  // Handle WebSocket close
-
   async function handleToolCall(tool: any) {
     try {
       const toolName = tool.name;
       const args = tool.arguments ? JSON.parse(tool.arguments) : {};
 
-      const result = await Promise.race([
-        forwardToN8n(toolName, args, session),
-        new Promise((resolve) =>
-          setTimeout(() => resolve({ timeout: true }), 1000)
-        ),
-      ]);
+      // log.info("🔧 Tool call:", { toolName });
 
-      safeSendToOpenAI({
+      // Forward to n8n webhook
+      const result = await forwardToN8n(toolName, args, session);
+
+      // ADD ROBUST LOGGING HERE
+      // log.info("Result from n8n webhook:", {
+      //   toolName,
+      //   result,
+      // });
+
+      // Send result back to OpenAI
+      const functionOutput = {
         type: "conversation.item.create",
         item: {
           type: "function_call_output",
-          role: "assistant",
+          role: "system",
           output: JSON.stringify(result),
         },
-      });
+      };
 
-      responseInFlight = false;
-      safeCreateResponse();
-    } catch (err) {
-      responseInFlight = false;
+      openaiWs?.send(JSON.stringify(functionOutput));
+
+      // Trigger next response immediately
+      setTimeout(() => {
+        if (openaiWs?.readyState === WebSocket.OPEN) {
+          openaiWs.send(
+            JSON.stringify({
+              type: "response.create",
+              response: {
+                modalities: ["text", "audio"],
+              },
+            })
+          );
+        }
+      }, 100); // Minimal delay
+    } catch (error: any) {
+      log.error("Error handling tool call", error);
     }
   }
 
+  // Handle WebSocket close
   conn.on("close", async (code, reason) => {
     // log.info("🔚 Twilio WebSocket closed", { callSid });
 
