@@ -95,7 +95,10 @@ export default async function incomingCallRoute(fastify: FastifyInstance) {
       // Get the host from request headers
 
       // Use wss:// protocol and add parameters in the Stream element
-      const wsUrl = `wss://${host}/media-stream`;
+      // const wsUrl = `wss://${host}/media-stream`;
+
+      const baseUrl = process.env.APP_BASE_URL!;
+      const wsUrl = baseUrl.replace("https", "wss") + "/media-stream";
 
       // Generate TwiML response
       const twiml = generateTwiML(wsUrl, callSid, token, from, to, session);

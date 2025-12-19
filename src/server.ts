@@ -15,6 +15,7 @@ import { env } from "./config/env.js";
 import knowledgeRoutes from "./routes/knowledgeApi.js";
 
 const fastify = Fastify({
+  trustProxy: true,
   logger: false, // We use our own logger
   connectionTimeout: 60000,
   keepAliveTimeout: 60000,
@@ -35,7 +36,10 @@ fastify.register(fastifyHelmet, {
 fastify.register(fastifyCors, {
   origin:
     env.NODE_ENV === "production"
-      ? ["https://app.zevaux.com", "https://zevaux.com"]
+      ? [
+          "https://zevaux-backend-vgdw.onrender.com/",
+          "https://zevaux-backend-vgdw.onrender.com/",
+        ]
       : ["http://localhost:3000", "http://localhost:3001"],
   credentials: true,
 });
