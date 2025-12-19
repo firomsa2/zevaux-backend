@@ -2314,16 +2314,16 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
           }
 
           // Trigger AI response after a short delay to process context
-          setTimeout(() => {
-            openaiWs?.send(
-              JSON.stringify({
-                type: "response.create",
-                response: {
-                  modalities: ["text", "audio"],
-                },
-              })
-            );
-          }, 300);
+          // setTimeout(() => {
+          //   openaiWs?.send(
+          //     JSON.stringify({
+          //       type: "response.create",
+          //       response: {
+          //         modalities: ["text", "audio"],
+          //       },
+          //     })
+          //   );
+          // }, 300);
           // triggerResponse();
         }
 
