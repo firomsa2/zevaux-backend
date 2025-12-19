@@ -4,6 +4,7 @@ import { SessionManager } from "../core/sessionManager.js";
 import { signCallToken } from "../utils/hmac.js";
 import { log } from "../utils/logger.js";
 import twilio from "twilio";
+import { validateTwilioSignature } from "../utils/twilioSignature.js";
 
 // Initialize Twilio client for validation
 const twilioClient = twilio(
@@ -13,6 +14,18 @@ const twilioClient = twilio(
 
 export default async function incomingCallRoute(fastify: FastifyInstance) {
   fastify.post("/incoming-call", async (request, reply) => {
+    console.log("Validating Twilio signature for incoming call");
+    const isValid = await validateTwilioSignature(request);
+    console.log("Twilio signature valid:", isValid);
+
+    if (!isValid) {
+      return reply.status(401).type("text/xml").send(`
+        <?xml version="1.0" encoding="UTF-8"?>
+        <Response>
+          <Reject reason="busy"/>
+        </Response>
+      `);
+    }
     try {
       // log.info("Incoming call request received", {
       //   headers: request.headers,
@@ -24,19 +37,19 @@ export default async function incomingCallRoute(fastify: FastifyInstance) {
       });
 
       // Validate Twilio signature
-      const isValid = await validateTwilioSignature(request);
-      if (!isValid) {
-        log.warn("Invalid Twilio signature");
-        return reply
-          .status(401)
-          .type("text/xml")
-          .send(
-            `<?xml version="1.0" encoding="UTF-8"?>
-          <Response>
-            <Reject reason="busy"/>
-          </Response>`
-          );
-      }
+      // const isValid = await validateTwilioSignature(request);
+      // if (!isValid) {
+      //   log.warn("Invalid Twilio signature");
+      //   return reply
+      //     .status(401)
+      //     .type("text/xml")
+      //     .send(
+      //       `<?xml version="1.0" encoding="UTF-8"?>
+      //     <Response>
+      //       <Reject reason="busy"/>
+      //     </Response>`
+      //     );
+      // }
 
       const params = (request.body as Record<string, any>) || {};
       const from = params.From || params.from || "unknown";
@@ -160,32 +173,32 @@ export default async function incomingCallRoute(fastify: FastifyInstance) {
   });
 }
 
-async function validateTwilioSignature(request: any): Promise<boolean> {
-  // Skip validation in development
-  if (process.env.NODE_ENV !== "production") {
-    return true;
-  }
+// async function validateTwilioSignature(request: any): Promise<boolean> {
+//   // Skip validation in development
+//   if (process.env.NODE_ENV !== "production") {
+//     return true;
+//   }
 
-  const signature = request.headers["x-twilio-signature"];
-  const url = `${request.protocol}://${request.hostname}${request.url}`;
-  const params = request.body;
+//   const signature = request.headers["x-twilio-signature"];
+//   const url = `${request.protocol}://${request.hostname}${request.url}`;
+//   const params = request.body;
 
-  if (!signature || !process.env.TWILIO_AUTH_TOKEN) {
-    return false;
-  }
+//   if (!signature || !process.env.TWILIO_AUTH_TOKEN) {
+//     return false;
+//   }
 
-  try {
-    return twilio.validateRequest(
-      process.env.TWILIO_AUTH_TOKEN,
-      signature,
-      url,
-      params
-    );
-  } catch (error) {
-    // log.error("Twilio signature validation error", error);
-    return false;
-  }
-}
+//   try {
+//     return twilio.validateRequest(
+//       process.env.TWILIO_AUTH_TOKEN,
+//       signature,
+//       url,
+//       params
+//     );
+//   } catch (error) {
+//     // log.error("Twilio signature validation error", error);
+//     return false;
+//   }
+// }
 
 function generateTwiML(
   wsUrl: string,
