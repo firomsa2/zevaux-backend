@@ -1742,6 +1742,7 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
   let isSessionInitialized = false;
   let audioBuffer: string[] = [];
   let lastUserUtterance = "";
+  let hasReceivedAnyCallerAudio = false;
 
   // Connection/turn state (per websocket)
   let hasReceivedStop = false;
@@ -1935,6 +1936,8 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
           return;
         }
 
+        hasReceivedAnyCallerAudio = true;
+
         if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
           // Send immediately if initialized
           if (isSessionInitialized) {
@@ -2035,6 +2038,24 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
         // Set up message handling IMMEDIATELY
         setupOpenAIMessageHandling();
 
+        // If this is a reconnect, replay recent conversation context into the new OpenAI session
+        // to avoid the assistant starting "fresh".
+        const contextItems: any[] = Array.isArray(session?.conversationContext)
+          ? session.conversationContext
+          : [];
+        const replay = contextItems.slice(-10);
+        for (const item of replay) {
+          if (!item?.content || !item?.role) continue;
+          safeSendToOpenAI({
+            type: "conversation.item.create",
+            item: {
+              type: "message",
+              role: item.role,
+              content: item.content,
+            },
+          });
+        }
+
         // Mark as initialized and flush any buffered audio
         isSessionInitialized = true;
 
@@ -2056,9 +2077,37 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
           audioBuffer = [];
         }
 
-        // IMPORTANT: Don’t auto-trigger a response on connect.
-        // TwiML already plays an intro greeting; letting the caller speak first prevents
-        // overlapping audio and “fresh start” repeats on reconnect.
+        // AI speaks first (a greeting), but only once per CallSid (idempotent across reconnects).
+        // If the caller starts talking, barge-in will cancel/clear.
+        if (session && !session.__aiFirstGreetingSent) {
+          session.__aiFirstGreetingSent = true;
+
+          const businessName = session.business?.name || "our business";
+          const configuredGreeting = session.businessConfig?.introScript;
+          const greetingText =
+            typeof configuredGreeting === "string" && configuredGreeting.trim()
+              ? configuredGreeting.trim()
+              : `Welcome to ${businessName}. How can I help you today?`;
+
+          // Strongly constrain the first assistant message so it matches what you want callers to hear.
+          safeSendToOpenAI({
+            type: "conversation.item.create",
+            item: {
+              type: "message",
+              role: "system",
+              content: `CALL OPENING: Your very first spoken message MUST be exactly:\n\n"${greetingText}"\n\nThen pause and wait for the caller. If interrupted, stop speaking immediately and listen.`,
+            },
+          });
+
+          setTimeout(() => {
+            safeSendToOpenAI({
+              type: "response.create",
+              response: {
+                modalities: ["text", "audio"],
+              },
+            });
+          }, 50);
+        }
       });
 
       openaiWs.on("error", (error) => {

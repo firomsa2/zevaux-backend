@@ -208,52 +208,10 @@ function generateTwiML(
   to: string,
   session: CallSession
 ): string {
-  console.log("Generating TwiML for call", {
-    callSid,
-    businessId: session.businessId,
-    businessName: session.business?.name,
-  });
-  // log.info("Generating TwiML for call", {
-  //   callSid,
-  //   businessId: session.businessId,
-  //   businessName: session.business?.name,
-  // });
-  // Check if we should play a greeting first
-  const greeting =
-    session.businessConfig?.introScript ||
-    `Thank you for calling ${
-      session.business?.name || "us"
-    }. Connecting you now.`;
-
-  console.log("Using greeting", { greeting });
-  // log.info("Using greeting", { greeting });
-  // Get voice profile
-  const voiceProfile = session.businessConfig?.voiceProfile || {
-    voice: "alice",
-    language: "en-US",
-  };
-  console.log("Using voice profile", voiceProfile);
-  // log.info("Using voice profile", { voiceProfile });
-
-  console.log("Generated TwiML", { wsUrl, callSid, from, to });
-  // log.info("Generated TwiML", { wsUrl, callSid, from, to });
-
-  console.log(
-    "TwiML Response:",
-    `<?xml version="1.0" encoding="UTF-8"?>
+  // AI speaks first: keep TwiML minimal (no <Say>) to avoid double-greeting.
+  // The assistant greeting is generated via the realtime stream.
+  return `<?xml version="1.0" encoding="UTF-8"?>
     <Response>
-      ${
-        greeting
-          ? `
-      <Say voice="${voiceProfile.voice}" language="${
-              voiceProfile.language || "en-US"
-            }">
-        ${greeting}
-      </Say>
-      <Pause length="1"/>
-      `
-          : ""
-      }
       <Connect>
         <Stream url="${wsUrl}" name="zevaux_stream">
           <Parameter name="callSid" value="${callSid}" />
@@ -265,58 +223,8 @@ function generateTwiML(
             session.business?.name || ""
           }" />
           <Parameter name="timestamp" value="${Date.now()}" />
+          <Parameter name="aiSpeaksFirst" value="1" />
         </Stream>
       </Connect>
-    </Response>`
-  );
-
-  //   return `<?xml version="1.0" encoding="UTF-8"?>
-  //     <Response>
-  //       ${
-  //         greeting
-  //           ? `
-  //       <Say voice="${voiceProfile.voice}" language="${
-  //               voiceProfile.language || "en-US"
-  //             }">
-  //         ${greeting}
-  //       </Say>
-  //       <Pause length="1"/>
-  //       `
-  //           : ""
-  //       }
-  //       <Connect>
-  //         <Stream url="${wsUrl}" name="zevaux_stream">
-  //           <Parameter name="callSid" value="${callSid}" />
-  //           <Parameter name="token" value="${token}" />
-  //           <Parameter name="from" value="${from}" />
-  //           <Parameter name="to" value="${to}" />
-  //           <Parameter name="businessId" value="${session.businessId}" />
-  //           <Parameter name="businessName" value="${
-  //             session.business?.name || ""
-  //           }" />
-  //           <Parameter name="timestamp" value="${Date.now()}" />
-  //         </Stream>
-  //       </Connect>
-  //     </Response>`;
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-       <Response>
-         <Say voice="Google.en-US-Chirp3-HD-Aoede">Please wait while we connect your call to the A. I.</Say>
-         <!--<Pause length="1"/>-->
-         <!--<Say voice="Google.en-US-Chirp3-HD-Aoede">O.K. you can start talking!</Say>-->
-         <Connect>
-           <Stream url="${wsUrl}"  name="zevaux_stream">
-             <!-- Add parameters here - Twilio will send these in the WebSocket start event -->
-             <Parameter name="callSid" value="${callSid}" />
-             <Parameter name="token" value="${token}" />
-             <Parameter name="from" value="${from}" />
-             <Parameter name="to" value="${to}" />
-             <Parameter name="businessId" value="${session.businessId}" />
-                <Parameter name="businessName" value="${
-                  session.business?.name || ""
-                }" />
-             <Parameter name="timestamp" value="${Date.now()}" />
-           </Stream>
-         </Connect>
-       </Response>`;
+    </Response>`;
 }
