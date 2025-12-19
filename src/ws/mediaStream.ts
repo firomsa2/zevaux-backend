@@ -1901,7 +1901,7 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
           isSessionInitialized
         ) {
           // Commit the audio buffer and trigger response
-          openaiWs.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+          // openaiWs.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
 
           // Create response immediately
           openaiWs.send(
@@ -1920,7 +1920,7 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
         log.info("Stop event received, ending call");
 
         if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-          openaiWs.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+          // openaiWs.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
           openaiWs.close();
         }
 
@@ -1969,7 +1969,7 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
               type: "server_vad",
               threshold: 0.3,
               prefix_padding_ms: 100,
-              silence_duration_ms: 300, // REDUCED for faster responses
+              silence_duration_ms: 400,
             },
             input_audio_format: "g711_ulaw",
             output_audio_format: "g711_ulaw",
