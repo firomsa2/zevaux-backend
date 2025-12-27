@@ -158,6 +158,23 @@ export class ToolRouter {
       },
       {
         type: "function",
+        name: "search_knowledge_base",
+        description:
+          "Search the business knowledge base for information about policies, services, pricing, hours, etc.",
+        parameters: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description:
+                "The search query (e.g., 'refund policy', 'pricing for haircut')",
+            },
+          },
+          required: ["query"],
+        },
+      },
+      {
+        type: "function",
         name: "log_conversation_event",
         description: "Log important conversation events",
         parameters: {

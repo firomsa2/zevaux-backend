@@ -1,200 +1,3 @@
-// // models/CallSession.ts - UPDATED VERSION
-// import { supabase } from "../utils/supabase.js";
-// import { log } from "../utils/logger.js";
-// // import { ToolRouter } from "../core/functionRouter.js";
-// import { searchKnowledgeBase } from "../core/knowledgeBase.js";
-
-// export interface CreateCallProps {
-//   callSid: string;
-//   from: string;
-//   to: string;
-// }
-
-// export class CallSession {
-//   callSid: string;
-//   from: string;
-//   to: string;
-//   callId: string | null = null;
-//   businessId: string | null = null;
-//   business: any = null;
-//   businessConfig: any = null;
-//   businessPrompt: string | null = null;
-//   transcriptBuffers: string[] = [];
-//   startedAt: string = new Date().toISOString();
-
-//   constructor(props: CreateCallProps) {
-//     this.callSid = props.callSid;
-//     this.from = props.from;
-//     this.to = props.to;
-//   }
-
-//   async loadBusinessAndConfig() {
-//     // Look up business by phone number
-//     const { data: phoneEndpoint } = await supabase
-//       .from("phone_endpoints")
-//       .select("business_id")
-//       .eq("phone_number", this.to)
-//       .eq("channel_type", "voice")
-//       .eq("status", "active")
-//       .limit(1)
-//       .single();
-
-//     if (!phoneEndpoint) throw new Error("Phone number not found");
-
-//     this.businessId = phoneEndpoint.business_id;
-
-//     // Load business
-//     const { data: business } = await supabase
-//       .from("business")
-//       .select("*")
-//       .eq("id", this.businessId)
-//       .limit(1)
-//       .single();
-
-//     if (!business) throw new Error("Business not found");
-//     this.business = business;
-
-//     // Load business config
-//     const { data: config } = await supabase
-//       .from("business_configs")
-//       .select("config")
-//       .eq("business_id", this.businessId)
-//       .limit(1)
-//       .single();
-
-//     this.businessConfig = config?.config || {};
-
-//     // Load business prompt
-//     const { data: prompt } = await supabase
-//       .from("business_prompts")
-//       .select("system_prompt")
-//       .eq("business_id", this.businessId)
-//       .limit(1)
-//       .single();
-
-//     this.businessPrompt = prompt?.system_prompt || this.buildFallbackPrompt();
-
-//     log.info("Loaded business config", { businessId: this.businessId });
-//   }
-
-//   buildFallbackPrompt(): string {
-//     const businessName = this.business?.name || "Our business";
-//     const defaultLanguage = this.business?.default_language || "en";
-
-//     return `You are an AI receptionist for ${businessName}.
-//     Speak in ${defaultLanguage}. Be friendly, professional, and helpful.
-//     If you don't know something, say so politely and offer to help in another way.`;
-//   }
-
-//   async createCallRow(twilioMeta: Record<string, any> = {}) {
-//     const { data, error } = await supabase
-//       .from("calls")
-//       .insert({
-//         business_id: this.businessId,
-//         caller_phone: this.from,
-//         started_at: this.startedAt,
-//         metadata: twilioMeta,
-//       })
-//       .select()
-//       .single();
-
-//     if (error) {
-//       log.error("createCallRow error", error);
-//       throw error;
-//     }
-
-//     this.callId = data.id;
-
-//     // Also create call_log entry
-//     await supabase
-//       .from("call_logs")
-//       .insert({
-//         business_id: this.businessId,
-//         channel: "voice",
-//         twilio_sid: this.callSid,
-//         caller: this.from,
-//         status: "in_progress",
-//         start_time: this.startedAt,
-//       });
-
-//     return this.callId;
-//   }
-
-//   async searchKnowledge(query: string, topK = 3) {
-//     if (!this.businessId) return [];
-
-//     return await searchKnowledgeBase(this.businessId, query, topK);
-//   }
-
-//   pushTranscriptSegment(seg: string) {
-//     if (!seg) return;
-//     this.transcriptBuffers.push(seg);
-//   }
-
-//   getTranscript() {
-//     return this.transcriptBuffers.join("\n");
-//   }
-
-//   async persistTranscriptAndSummary(summary?: string) {
-//     const content = this.getTranscript();
-
-//     // Save transcript
-//     const { error: transcriptError } = await supabase
-//       .from("transcripts")
-//       .insert({
-//         call_id: this.callId,
-//         content,
-//         summary: summary || this.generateSummary(content),
-//       });
-
-//     if (transcriptError) log.error("persistTranscript error", transcriptError);
-
-//     // Update call_log with outcome
-//     const outcome = this.determineOutcome(content);
-//     await supabase
-//       .from("call_logs")
-//       .update({
-//         status: "completed",
-//         outcome: outcome,
-//         summary: summary || this.generateSummary(content),
-//         end_time: new Date().toISOString(),
-//       })
-//       .eq("twilio_sid", this.callSid);
-//   }
-
-//   generateSummary(content: string): string {
-//     // Simple summary - you can improve this with AI later
-//     const lines = content.split('\n');
-//     const lastLines = lines.slice(-5).join(' ');
-//     return `Call about: ${lastLines.substring(0, 100)}...`;
-//   }
-
-//   determineOutcome(content: string): string {
-//     // Simple outcome detection
-//     if (content.toLowerCase().includes("book") || content.toLowerCase().includes("appointment")) {
-//       return "booking_created";
-//     } else if (content.toLowerCase().includes("thank you") || content.toLowerCase().includes("bye")) {
-//       return "info_only";
-//     } else {
-//       return "unknown";
-//     }
-//   }
-
-//   async finalizeCall() {
-//     const endedAt = new Date().toISOString();
-
-//     const { error } = await supabase
-//       .from("calls")
-//       .update({
-//         ended_at: endedAt,
-//       })
-//       .eq("id", this.callId);
-
-//     if (error) log.error("finalizeCall error", error);
-//   }
-// }
-
-// models/CallSession.ts
 import { supabase } from "../utils/supabase.js";
 import { log } from "../utils/logger.js";
 import OpenAI from "openai";
@@ -702,16 +505,9 @@ BUSINESS DETAILS:
 - Tone: ${tone}
 
 IMPORTANT REMINDERS:
-1. NEVER reveal you're an AI or mention OpenAI/ChatGPT.
-2. If unsure about anything, ask the caller to hold while you check or offer to take a message.
-3. Always confirm important details like appointments or contact information.
-4. Be patient and repeat information if needed.
-5. If the caller is upset, remain calm and offer to transfer to a human.
-
+1. USE THE ${`search_knowledge_base`} TOOL for any questions about services do you offer, How long does a haircut take?, policies, pricing, specific services, or business details not provided in the initial context.
 For questions about:
-- Hours: Check the business hours information
-- Services: Refer to the services list
-- Pricing: If not in knowledge base, say "I don't have pricing details, but I can connect you with someone who does"
+- Pricing: Use ${`search_knowledge_base`}, to find pricing. If not found, say "I don't have pricing details, but I can connect you with someone who does"
 - Appointments: Use the booking tool with all required information`;
 
     return enhancedPrompt;
@@ -940,3 +736,16 @@ For questions about:
     }
   }
 }
+
+// IMPORTANT REMINDERS:
+// 1. NEVER reveal you're an AI or mention OpenAI/ChatGPT.
+// 2. If unsure about anything, ask the caller to hold while you check or offer to take a message.
+// 3. Always confirm important details like appointments or contact information.
+// 4. Be patient and repeat information if needed.
+// 5. If the caller is upset, remain calm and offer to transfer to a human.
+// 6. USE THE ${`search_knowledge_base`} TOOL for any questions about services do you offer, policies, pricing, specific services, or business details not provided in the initial context.
+// For questions about:
+// - Hours: Check the business hours information
+// - Services: Refer to the services list
+// - Pricing: Use ${`search_knowledge_base`}, to find pricing. If not found, say "I don't have pricing details, but I can connect you with someone who does"
+// - Appointments: Use the booking tool with all required information`;

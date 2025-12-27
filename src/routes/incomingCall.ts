@@ -36,6 +36,16 @@ export default async function incomingCallRoute(fastify: FastifyInstance) {
         body: request.body,
       });
 
+      // try {
+      // log.info("Incoming call request received", {
+      //   headers: request.headers,
+      //   body: request.body,
+      // });
+      // console.log("Incoming call request received", {
+      //   headers: request.headers,
+      //   body: request.body,
+      // });
+
       // Validate Twilio signature
       // const isValid = await validateTwilioSignature(request);
       // if (!isValid) {
@@ -108,10 +118,7 @@ export default async function incomingCallRoute(fastify: FastifyInstance) {
       // Get the host from request headers
 
       // Use wss:// protocol and add parameters in the Stream element
-      // const wsUrl = `wss://${host}/media-stream`;
-
-      const baseUrl = process.env.APP_BASE_URL!;
-      const wsUrl = baseUrl.replace("https", "wss") + "/media-stream";
+      const wsUrl = `wss://${host}/media-stream`;
 
       // Generate TwiML response
       const twiml = generateTwiML(wsUrl, callSid, token, from, to, session);
@@ -198,6 +205,127 @@ export default async function incomingCallRoute(fastify: FastifyInstance) {
 //     // log.error("Twilio signature validation error", error);
 //     return false;
 //   }
+// }
+
+// function generateTwiML(
+//   wsUrl: string,
+//   callSid: string,
+//   token: string,
+//   from: string,
+//   to: string,
+//   session: CallSession
+// ): string {
+//   console.log("Generating TwiML for call", {
+//     callSid,
+//     businessId: session.businessId,
+//     businessName: session.business?.name,
+//   });
+//   // log.info("Generating TwiML for call", {
+//   //   callSid,
+//   //   businessId: session.businessId,
+//   //   businessName: session.business?.name,
+//   // });
+//   // Check if we should play a greeting first
+//   const greeting =
+//     session.businessConfig?.introScript ||
+//     `Thank you for calling ${
+//       session.business?.name || "us"
+//     }. Connecting you now.`;
+
+//   console.log("Using greeting", { greeting });
+//   // log.info("Using greeting", { greeting });
+//   // Get voice profile
+//   const voiceProfile = session.businessConfig?.voiceProfile || {
+//     voice: "alice",
+//     language: "en-US",
+//   };
+//   console.log("Using voice profile", voiceProfile);
+//   // log.info("Using voice profile", { voiceProfile });
+
+//   console.log("Generated TwiML", { wsUrl, callSid, from, to });
+//   // log.info("Generated TwiML", { wsUrl, callSid, from, to });
+
+//   console.log(
+//     "TwiML Response:",
+//     `<?xml version="1.0" encoding="UTF-8"?>
+//     <Response>
+//       ${
+//         greeting
+//           ? `
+//       <Say voice="${voiceProfile.voice}" language="${
+//               voiceProfile.language || "en-US"
+//             }">
+//         ${greeting}
+//       </Say>
+//       <Pause length="1"/>
+//       `
+//           : ""
+//       }
+//       <Connect>
+//         <Stream url="${wsUrl}" name="zevaux_stream">
+//           <Parameter name="callSid" value="${callSid}" />
+//           <Parameter name="token" value="${token}" />
+//           <Parameter name="from" value="${from}" />
+//           <Parameter name="to" value="${to}" />
+//           <Parameter name="businessId" value="${session.businessId}" />
+//           <Parameter name="businessName" value="${
+//             session.business?.name || ""
+//           }" />
+//           <Parameter name="timestamp" value="${Date.now()}" />
+//         </Stream>
+//       </Connect>
+//     </Response>`
+//   );
+
+//   //   return `<?xml version="1.0" encoding="UTF-8"?>
+//   //     <Response>
+//   //       ${
+//   //         greeting
+//   //           ? `
+//   //       <Say voice="${voiceProfile.voice}" language="${
+//   //               voiceProfile.language || "en-US"
+//   //             }">
+//   //         ${greeting}
+//   //       </Say>
+//   //       <Pause length="1"/>
+//   //       `
+//   //           : ""
+//   //       }
+//   //       <Connect>
+//   //         <Stream url="${wsUrl}" name="zevaux_stream">
+//   //           <Parameter name="callSid" value="${callSid}" />
+//   //           <Parameter name="token" value="${token}" />
+//   //           <Parameter name="from" value="${from}" />
+//   //           <Parameter name="to" value="${to}" />
+//   //           <Parameter name="businessId" value="${session.businessId}" />
+//   //           <Parameter name="businessName" value="${
+//   //             session.business?.name || ""
+//   //           }" />
+//   //           <Parameter name="timestamp" value="${Date.now()}" />
+//   //         </Stream>
+//   //       </Connect>
+//   //     </Response>`;
+
+//   return `<?xml version="1.0" encoding="UTF-8"?>
+//        <Response>
+//          <Say voice="Google.en-US-Chirp3-HD-Aoede">Please wait while we connect your call to the A. I.</Say>
+//          <!--<Pause length="1"/>-->
+//          <!--<Say voice="Google.en-US-Chirp3-HD-Aoede">O.K. you can start talking!</Say>-->
+//          <Connect>
+//            <Stream url="${wsUrl}"  name="zevaux_stream">
+//              <!-- Add parameters here - Twilio will send these in the WebSocket start event -->
+//              <Parameter name="callSid" value="${callSid}" />
+//              <Parameter name="token" value="${token}" />
+//              <Parameter name="from" value="${from}" />
+//              <Parameter name="to" value="${to}" />
+//              <Parameter name="businessId" value="${session.businessId}" />
+//                 <Parameter name="businessName" value="${
+//                   session.business?.name || ""
+//                 }" />
+//              <Parameter name="timestamp" value="${Date.now()}" />
+//            </Stream>
+//          </Connect>
+//        </Response>`;
 // }
 
 function generateTwiML(

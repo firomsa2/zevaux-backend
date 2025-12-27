@@ -18,6 +18,7 @@ export function createOpenAIRealtimeWS(): WebSocket {
   });
 
   let connectionTimeout: NodeJS.Timeout;
+  let pingInterval: NodeJS.Timeout;
   let isConnected = false;
 
   // Set connection timeout
@@ -32,14 +33,23 @@ export function createOpenAIRealtimeWS(): WebSocket {
     clearTimeout(connectionTimeout);
     isConnected = true;
     log.info("✅ OpenAI connection established");
+
+    // Keep-alive: Send a ping every 30 seconds
+    pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.ping();
+      }
+    }, 30000);
   });
 
   ws.on("error", (error) => {
     clearTimeout(connectionTimeout);
+    clearInterval(pingInterval);
     // log.error("❌ OpenAI connection error", { error: error.message });
   });
 
   ws.on("close", (code, reason) => {
+    clearInterval(pingInterval);
     // log.info("🔒 OpenAI connection closed", {
     //   code,
     //   reason: reason.toString(),
