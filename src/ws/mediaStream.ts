@@ -245,8 +245,7 @@ export async function handleMediaStream(conn: WebSocket, req: FastifyRequest) {
 
     try {
       if (session) {
-        const finalText = session.getTranscript();
-        await session.persistTranscriptAndSummary(finalText);
+        await session.persistTranscriptAndSummary();
         await session.finalizeCall();
       }
     } catch (err) {

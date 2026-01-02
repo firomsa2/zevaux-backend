@@ -10,7 +10,7 @@ const openai = new OpenAI({
 });
 
 export default async function knowledgeRoutes(fastify: FastifyInstance) {
-  log.info("Registering knowledge API routes");
+  log.info({}, "Registering knowledge API routes");
   // Get knowledge base stats
   fastify.get(
     "/api/business/:businessId/knowledge/stats",
@@ -22,7 +22,14 @@ export default async function knowledgeRoutes(fastify: FastifyInstance) {
         // log.info("Knowledge stats retrieved", { businessId, stats });
         return reply.send({ success: true, data: stats });
       } catch (error: any) {
-        log.error("Failed to get knowledge stats", error);
+        log.error(
+          {
+            error: error?.message || error,
+            stack: error?.stack,
+            businessId,
+          },
+          "Failed to get knowledge stats"
+        );
         return reply
           .status(500)
           .send({ error: "Failed to get knowledge stats" });
@@ -57,7 +64,15 @@ export default async function knowledgeRoutes(fastify: FastifyInstance) {
           })),
         });
       } catch (error: any) {
-        log.error("Knowledge search failed", error);
+        log.error(
+          {
+            error: error?.message || error,
+            stack: error?.stack,
+            businessId,
+            query,
+          },
+          "Knowledge search failed"
+        );
         return reply.status(500).send({ error: "Search failed" });
       }
     }
@@ -79,7 +94,13 @@ export default async function knowledgeRoutes(fastify: FastifyInstance) {
         embeddingFirst5: embedding.slice(0, 5),
       });
     } catch (error: any) {
-      log.error("Embedding test failed", error);
+      log.error(
+        {
+          error: error?.message || error,
+          stack: error?.stack,
+        },
+        "Embedding test failed"
+      );
       return reply.status(500).send({ error: "Embedding generation failed" });
     }
   });
@@ -108,7 +129,7 @@ export default async function knowledgeRoutes(fastify: FastifyInstance) {
     // Clear embedding cache
     (VectorSearchService as any).embeddingCache.clear();
 
-    log.info("Embedding cache cleared");
+    log.info({}, "Embedding cache cleared");
     return reply.send({ success: true, message: "Cache cleared" });
   });
 }

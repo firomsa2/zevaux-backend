@@ -2,6 +2,8 @@ import { supabase } from "../utils/supabase.js";
 import { log } from "../utils/logger.js";
 import OpenAI from "openai";
 import { VectorSearchService } from "../services/vectorSearchService.js";
+import { randomUUID } from "crypto";
+import twilio from "twilio";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -25,10 +27,12 @@ export class CallSession {
   businessConfig: any = null;
   businessPrompt: string | null = null;
   transcriptBuffers: string[] = [];
+  transcriptEntries: Array<{ speaker: "user" | "assistant"; text: string }> = [];
   conversationContext: any[] = [];
   startedAt: string = new Date().toISOString();
   openaiSessionId: string | null = null;
   currentResponseId: string | null = null;
+  recordingUrl: string | null = null;
 
   constructor(props: CreateCallProps) {
     this.callSid = props.callSid;
@@ -141,51 +145,69 @@ Start every call with: "Thanks for calling ${businessName}, how can I help you t
 End calls politely with: "Thanks for calling ${businessName}, have a great day!"`;
   }
 
+  /**
+   * Create call log entry in call_logs table (primary table for call tracking)
+   * Returns the call_logs id which is stored in this.callId
+   */
   async createCallRow(twilioMeta: Record<string, any> = {}) {
     try {
+      // Create call_log entry (primary table for call tracking)
       const { data, error } = await supabase
-        .from("calls")
+        .from("call_logs")
         .insert({
           business_id: this.businessId,
-          caller_phone: this.from,
-          //   direction: this.direction,
-          started_at: this.startedAt,
+          channel: "voice",
+          twilio_sid: this.callSid,
+          caller: this.from,
+          status: "in_progress",
+          start_time: this.startedAt,
           metadata: {
+            business_name: this.business?.name,
+            business_id: this.businessId,
+            to: this.to,
+            from: this.from,
+            direction: this.direction,
             ...twilioMeta,
             call_sid: this.callSid,
-            to: this.to,
-            business_id: this.businessId,
           },
         })
         .select()
         .single();
 
       if (error) {
-        // log.error("createCallRow error", error);
+        log.error(
+          {
+            error,
+            callSid: this.callSid,
+            businessId: this.businessId,
+          },
+          "Failed to create call_log entry"
+        );
         throw error;
       }
 
+      // Store the call_logs id as callId (used for transcript references)
       this.callId = data.id;
 
-      // Create call_log entry
-      await supabase.from("call_logs").insert({
-        business_id: this.businessId,
-        channel: "voice",
-        twilio_sid: this.callSid,
-        caller: this.from,
-        status: "in_progress",
-        start_time: this.startedAt,
-        metadata: {
-          business_name: this.business?.name,
-          business_id: this.businessId,
-          call_id: this.callId,
+      log.info(
+        {
+          callId: this.callId,
+          callSid: this.callSid,
+          businessId: this.businessId,
         },
-      });
+        "Call log entry created"
+      );
 
-      // log.info("Call row created", { callId: this.callId });
       return this.callId;
     } catch (error: any) {
-      log.error("Failed to create call row", error);
+      log.error(
+        {
+          error: error?.message || error,
+          stack: error?.stack,
+          callSid: this.callSid,
+        },
+        "Failed to create call row"
+      );
       throw error;
     }
   }
@@ -482,33 +504,29 @@ RULES:
 
   buildEnhancedSystemPrompt(): string {
     const basePrompt = this.businessPrompt || this.buildFallbackPrompt();
-
-    // Add dynamic business info
-    const businessName = this.business?.name || "Our business";
-    const industry = this.business?.industry || "business";
-    const defaultLanguage = "en";
-    // const defaultLanguage = this.business?.default_language || "en";
-    // const supportedLanguages = this.business?.supported_languages || ["en"];
-    const tone = this.business?.tone || "friendly, professional";
-
-    // Get dynamic info (these could be cached)
-    const hoursTextPromise = this.getBusinessHoursText();
-    const servicesTextPromise = this.getServicesText();
-
-    // For now, we'll add placeholders and update them in real-time if needed
+    
     const enhancedPrompt = `${basePrompt}
 
-BUSINESS DETAILS:
-- Name: ${businessName}
-- Industry: ${industry}
-- Primary Language: ${defaultLanguage}
-- Tone: ${tone}
+KNOWLEDGE BASE USAGE:
+You have access to a knowledge base search tool (${`search_knowledge_base`}) that contains detailed business information.
 
-IMPORTANT REMINDERS:
-1. USE THE ${`search_knowledge_base`} TOOL for any questions about services do you offer, How long does a haircut take?, policies, pricing, specific services, or business details not provided in the initial context.
-For questions about:
-- Pricing: Use ${`search_knowledge_base`}, to find pricing. If not found, say "I don't have pricing details, but I can connect you with someone who does"
-- Appointments: Use the booking tool with all required information`;
+INFORMATION RETRIEVAL STRATEGY:
+1. First, check if the information is already provided in the context above (base prompt, previous conversation, or system messages).
+2. If the information is NOT available in the current context, use the ${`search_knowledge_base`} tool to search for it.
+3. Only use the knowledge base when you genuinely don't have the information needed to answer the caller's question.
+4. When using the knowledge base, search with clear, specific queries related to what the caller is asking.
+
+EXAMPLES:
+- Caller asks about pricing → If not in context, search knowledge base with query like "pricing" or "cost"
+- Caller asks about services → If not in context, search knowledge base with query like "services offered" or "what services do you provide"
+- Caller asks about hours → If not in context, search knowledge base with query like "business hours" or "opening hours"
+- Caller asks about policies → If not in context, search knowledge base with query related to the specific policy
+
+IMPORTANT:
+- Always try to answer from context first before searching
+- Use natural, conversational search queries
+- If the knowledge base doesn't have the information, politely inform the caller and offer alternatives (e.g., "I don't have that specific information, but I can connect you with someone who does" or "Let me take your contact information and have someone get back to you")
+- For appointment bookings, use the appropriate booking tool with all required information`;
 
     return enhancedPrompt;
   }
@@ -533,7 +551,84 @@ For questions about:
     }
   }
 
+  /**
+   * Add transcript entry in Vapi-compatible format (User/AI format)
+   * Includes deduplication to prevent duplicate entries
+   */
+  addTranscriptEntry(speaker: "user" | "assistant", text: string) {
+    if (!text?.trim()) return;
+
+    const trimmedText = text.trim();
+
+    // Deduplication: Check if the same text was recently added (within last 3 entries)
+    // This prevents duplicate transcript entries from OpenAI events
+    const recentEntries = this.transcriptEntries.slice(-3);
+    const isDuplicate = recentEntries.some(
+      (entry) =>
+        entry.speaker === speaker &&
+        entry.text.toLowerCase() === trimmedText.toLowerCase()
+    );
+
+    if (isDuplicate) {
+      log.info(
+        {
+          speaker,
+          textLength: trimmedText.length,
+        },
+        "Skipping duplicate transcript entry"
+      );
+      return;
+    }
+
+    // Filter out very short or meaningless entries (less than 2 characters)
+    if (trimmedText.length < 2) {
+      return;
+    }
+
+    // Store in the new format for Vapi compatibility
+    this.transcriptEntries.push({
+      speaker: speaker,
+      text: trimmedText,
+    });
+
+    // Also keep the old format for backward compatibility
+    const timestamp = new Date().toISOString().split("T")[1].split(".")[0];
+    const prefix = speaker === "user" ? "Caller" : "Assistant";
+    this.transcriptBuffers.push(`[${timestamp}] ${prefix}: ${trimmedText}`);
+
+    // Keep conversation context for RAG
+    this.conversationContext.push({
+      role: speaker,
+      content: trimmedText,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Keep last 20 messages in context
+    if (this.conversationContext.length > 20) {
+      this.conversationContext = this.conversationContext.slice(-20);
+    }
+  }
+
+  /**
+   * Get transcript in Vapi format: "User: ...\nAI: ...\nUser: ..."
+   */
   getTranscript(): string {
+    // Use the new format if available, otherwise fall back to old format
+    if (this.transcriptEntries.length > 0) {
+      return this.transcriptEntries
+        .map((entry) => {
+          const prefix = entry.speaker === "user" ? "User" : "AI";
+          return `${prefix}: ${entry.text}`;
+        })
+        .join("\n");
+    }
+    return this.transcriptBuffers.join("\n");
+  }
+
+  /**
+   * Get transcript in the old format (with timestamps)
+   */
+  getTranscriptWithTimestamps(): string {
     return this.transcriptBuffers.join("\n");
   }
 
@@ -634,62 +729,185 @@ For questions about:
     }
   }
 
+  /**
+   * Fetch recording URL from Twilio for this call
+   */
+  async fetchRecordingUrl(): Promise<string | null> {
+    try {
+      // If we already have a recording URL, return it
+      if (this.recordingUrl) {
+        return this.recordingUrl;
+      }
+
+      // Try to fetch from Twilio
+      if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN) {
+        log.warn("Twilio credentials not configured, skipping recording URL fetch");
+        return null;
+      }
+
+      const twilioClient = twilio(
+        process.env.TWILIO_ACCOUNT_SID,
+        process.env.TWILIO_AUTH_TOKEN
+      );
+
+      // Fetch recordings for this call
+      const recordings = await twilioClient.recordings.list({
+        callSid: this.callSid,
+        limit: 1,
+      });
+
+      if (recordings && recordings.length > 0) {
+        const recording = recordings[0];
+        // Get the recording URL (WAV format)
+        const recordingUrl = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Recordings/${recording.sid}.wav`;
+        this.recordingUrl = recordingUrl;
+        return recordingUrl;
+      }
+
+      return null;
+    } catch (error: any) {
+      log.error("Failed to fetch recording URL from Twilio", error);
+      return null;
+    }
+  }
+
   async persistTranscriptAndSummary() {
     try {
       const transcript = this.getTranscript();
       const summary = await this.generateSummaryWithAI();
       const outcome = this.determineOutcome();
 
-      // Save transcript
-      const { error: transcriptError } = await supabase
-        .from("transcripts")
-        .insert({
-          call_id: this.callId,
-          business_id: this.businessId,
-          content: transcript,
-          summary: summary,
-          metadata: {
-            outcome: outcome,
-            conversation_length: this.conversationContext.length,
-            business_id: this.businessId,
-          },
-        });
-
-      if (transcriptError) {
-        // log.error("persistTranscript error", transcriptError);
+      // Try to fetch recording URL if not already set
+      if (!this.recordingUrl) {
+        await this.fetchRecordingUrl();
       }
 
-      // Update call_log with outcome
-      await supabase
-        .from("call_logs")
-        .update({
-          status: "completed",
+      // Generate a unique ID for this transcript entry (similar to Vapi format)
+      const transcriptId = randomUUID();
+      const createdAt = new Date().toISOString();
+
+      // Save transcript in Vapi-compatible format
+      // The format matches: {idx, id, call_id, content, summary, Vapi_call_id, created_at, recording_URL, business_id}
+      const transcriptData: any = {
+        id: transcriptId,
+        call_id: this.callId,
+        business_id: this.businessId,
+        content: transcript,
+        summary: summary,
+        created_at: createdAt,
+        // Store Twilio call SID as equivalent to Vapi_call_id
+        Vapi_call_id: this.callSid,
+        // Store metadata as JSONB (transcripts table has metadata column)
+        metadata: {
           outcome: outcome,
-          summary: summary,
-          end_time: new Date().toISOString(),
-          metadata: {
-            ...this.businessConfig,
-            transcript_length: transcript.length,
-            summary_generated: true,
+          conversation_length: this.conversationContext.length,
+          business_id: this.businessId,
+          call_sid: this.callSid,
+          twilio_call_id: this.callSid,
+        },
+      };
+
+      // Add recording URL if available
+      if (this.recordingUrl) {
+        transcriptData.recording_URL = this.recordingUrl;
+        transcriptData.metadata.recording_url = this.recordingUrl;
+      }
+
+      // Save transcript
+      const { data: insertedTranscript, error: transcriptError } = await supabase
+        .from("transcripts")
+        .insert(transcriptData)
+        .select()
+        .single();
+
+      if (transcriptError) {
+        // Check if it's a foreign key constraint error
+        if (
+          transcriptError.code === "23503" &&
+          transcriptError.message?.includes("calls")
+        ) {
+          log.error(
+            {
+              error: transcriptError,
+              callId: this.callId,
+              callSid: this.callSid,
+              hint: "The transcripts table foreign key still references 'calls' table. Run the migration SQL to update it to reference 'call_logs'.",
+            },
+            "persistTranscript error: Foreign key constraint violation"
+          );
+        } else {
+          log.error(
+            {
+              error: transcriptError,
+              callId: this.callId,
+              callSid: this.callSid,
+            },
+            "persistTranscript error"
+          );
+        }
+      } else {
+        log.info(
+          {
+            transcriptId: insertedTranscript?.id,
+            callId: this.callId,
           },
-        })
+          "Transcript saved successfully"
+        );
+      }
+
+      // Calculate call duration in minutes
+      const endTime = new Date().toISOString();
+      const startTime = new Date(this.startedAt);
+      const endTimeDate = new Date(endTime);
+      const durationMs = endTimeDate.getTime() - startTime.getTime();
+      const minutes = Math.ceil(durationMs / 60000); // Round up to nearest minute
+      const durationSeconds = Math.ceil(durationMs / 1000);
+
+      // Update call_logs with outcome, summary, end_time, and minutes
+      // Note: minutes column should be added to call_logs table. If it doesn't exist,
+      // the error will be logged but minutes will still be stored in metadata
+      const updateData: any = {
+        status: "completed",
+        outcome: outcome,
+        summary: summary,
+        end_time: endTime,
+        minutes: minutes, // Add minutes column (add this column to call_logs table if it doesn't exist)
+        metadata: {
+          ...this.businessConfig,
+          transcript_length: transcript.length,
+          summary_generated: true,
+          transcript_id: transcriptId,
+          duration_ms: durationMs,
+          duration_seconds: durationSeconds,
+          minutes: minutes, // Also store in metadata as backup
+        },
+      };
+
+      const { error: callLogUpdateError } = await supabase
+        .from("call_logs")
+        .update(updateData)
         .eq("twilio_sid", this.callSid);
 
-      // Update calls table
-      await supabase
-        .from("calls")
-        .update({
-          ended_at: new Date().toISOString(),
-          minutes: Math.ceil(
-            (Date.now() - new Date(this.startedAt).getTime()) / 60000
-          ),
-          metadata: {
-            ...(this.businessConfig || {}),
-            outcome: outcome,
-            summary: summary.substring(0, 200),
+      if (callLogUpdateError) {
+        log.error(
+          {
+            error: callLogUpdateError,
+            callId: this.callId,
+            callSid: this.callSid,
           },
-        })
-        .eq("id", this.callId);
+          "Failed to update call_logs"
+        );
+      } else {
+        log.info(
+          {
+            callId: this.callId,
+            callSid: this.callSid,
+            minutes,
+            durationSeconds: Math.ceil(durationMs / 1000),
+          },
+          "Call log updated with completion data"
+        );
+      }
 
       // log.info("Transcript and summary persisted", {
       //   callId: this.callId,
@@ -701,20 +919,74 @@ For questions about:
     }
   }
 
+  /**
+   * Set the recording URL for this call (from Twilio)
+   */
+  setRecordingUrl(url: string) {
+    this.recordingUrl = url;
+  }
+
+  /**
+   * Finalize the call in call_logs table
+   * This is called when the call ends to ensure end_time is set
+   * Minutes calculation is handled in persistTranscriptAndSummary
+   */
   async finalizeCall() {
     try {
       const endedAt = new Date().toISOString();
+      const startTime = new Date(this.startedAt);
+      const endTimeDate = new Date(endedAt);
+      const durationMs = endTimeDate.getTime() - startTime.getTime();
+      const minutes = Math.ceil(durationMs / 60000);
 
-      await supabase
-        .from("calls")
-        .update({
-          ended_at: endedAt,
-        })
-        .eq("id", this.callId);
+      // Update call_logs with end_time and minutes (if not already updated by persistTranscriptAndSummary)
+      // Note: minutes column should be added to call_logs table. If it doesn't exist,
+      // the error will be logged but minutes will still be stored in metadata
+      const updateData: any = {
+        end_time: endedAt,
+        minutes: minutes, // Add minutes column (add this column to call_logs table if it doesn't exist)
+        status: "completed", // Ensure status is set to completed
+        metadata: {
+          duration_ms: durationMs,
+          duration_seconds: Math.ceil(durationMs / 1000),
+          minutes: minutes, // Also store in metadata as backup
+        },
+      };
 
-      // log.info("Call finalized", { callId: this.callId });
+      const { error } = await supabase
+        .from("call_logs")
+        .update(updateData)
+        .eq("twilio_sid", this.callSid);
+
+      if (error) {
+        log.error(
+          {
+            error,
+            callId: this.callId,
+            callSid: this.callSid,
+          },
+          "Failed to finalize call in call_logs"
+        );
+      } else {
+        log.info(
+          {
+            callId: this.callId,
+            callSid: this.callSid,
+            minutes,
+          },
+          "Call finalized in call_logs"
+        );
+      }
     } catch (error: any) {
-      log.error("finalizeCall error", error);
+      log.error(
+        {
+          error: error?.message || error,
+          stack: error?.stack,
+          callId: this.callId,
+          callSid: this.callSid,
+        },
+        "finalizeCall error"
+      );
     }
   }
 
@@ -749,3 +1021,9 @@ For questions about:
 // - Services: Refer to the services list
 // - Pricing: Use ${`search_knowledge_base`}, to find pricing. If not found, say "I don't have pricing details, but I can connect you with someone who does"
 // - Appointments: Use the booking tool with all required information`;
+
+// BUSINESS DETAILS:
+// - Name: ${businessName}
+// - Industry: ${industry}
+// - Primary Language: ${defaultLanguage}
+// - Tone: ${tone}
