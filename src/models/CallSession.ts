@@ -54,7 +54,7 @@ export class CallSession {
         .from("phone_endpoints")
         .select("business_id")
         .eq("phone_number", this.to)
-        .eq("channel_type", "voice")
+        // .eq("channel_type", "voice")
         .eq("status", "active")
         .limit(1)
         .single();
