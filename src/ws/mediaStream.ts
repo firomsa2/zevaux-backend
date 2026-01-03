@@ -308,7 +308,8 @@ function setupOpenAiMessageHandling(
           log.info("Initiating handover to human");
           const targetPhone =
             session.businessConfig?.forwarding_phone ||
-            session.business?.phone_number;
+            session.business?.escalation_number;
+            // session.business?.phone_number;
 
           console.log("Handover to human, target phone:", targetPhone);
 
